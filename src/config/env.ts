@@ -33,9 +33,12 @@ interface EnvConfig {
   WHATSAPP_AUTH_DIR: string;
 
   // Twitter
+  TWITTER_ENABLED: string;
   TWITTER_AUTH_TOKEN?: string;
   TWITTER_CT0?: string;
   TWITTER_USERNAME?: string;
+  TWITTER_HEADLESS: string;
+  TWITTER_COOKIES_PATH: string;
 
   // Behavior
   STUDY_INTERVAL_MIN?: string;
@@ -86,9 +89,12 @@ export const env: EnvConfig = {
   WHATSAPP_AUTH_DIR: getEnv('WHATSAPP_AUTH_DIR', 'data/whatsapp-auth'),
 
   // Twitter
+  TWITTER_ENABLED: getEnv('TWITTER_ENABLED', 'false'),
   TWITTER_AUTH_TOKEN: getEnv('TWITTER_AUTH_TOKEN', ''),
   TWITTER_CT0: getEnv('TWITTER_CT0', ''),
   TWITTER_USERNAME: getEnv('TWITTER_USERNAME', ''),
+  TWITTER_HEADLESS: getEnv('TWITTER_HEADLESS', 'true'),
+  TWITTER_COOKIES_PATH: getEnv('TWITTER_COOKIES_PATH', 'data/twitter/cookies.json'),
 
   // Behavior
   STUDY_INTERVAL_MIN: getEnv('STUDY_INTERVAL_MIN', '30'),

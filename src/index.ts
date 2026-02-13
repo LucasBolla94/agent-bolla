@@ -5,6 +5,7 @@ import { db } from './database/connection.js';
 import { runMigrations } from './database/migrate.js';
 import { createMemoryService, createRagService } from './memory/index.js';
 import { createPersonalityService } from './personality/index.js';
+import { createTwitterPlatform } from './platforms/index.js';
 import { collector } from './training/index.js';
 
 async function main(): Promise<void> {
@@ -67,8 +68,13 @@ async function main(): Promise<void> {
     await telegram.start();
     console.log(`Telegram channel initialized (enabled=${env.TELEGRAM_ENABLED}).`);
 
+    // Twitter platform (phase 4.1)
+    const twitter = createTwitterPlatform();
+    await twitter.start();
+    console.log(`Twitter platform initialized (enabled=${env.TWITTER_ENABLED}).`);
+
     console.log('Agent Bolla initialized successfully!');
-    console.log('Phases 1.1 / 1.2 / 1.3 / 2.1 / 2.2 / 2.3 / 3.1 / 3.2 complete.');
+    console.log('Phases 1.1 / 1.2 / 1.3 / 2.1 / 2.2 / 2.3 / 3.1 / 3.2 / 3.3 / 4.1 complete.');
 
     // Expose for use in subsequent phases
     void router;
@@ -77,6 +83,7 @@ async function main(): Promise<void> {
     void personality;
     void whatsapp;
     void telegram;
+    void twitter;
 
   } catch (error) {
     console.error('Error initializing agent:', error);

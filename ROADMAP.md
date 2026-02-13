@@ -141,9 +141,9 @@
 > O agent vira uma pessoa no X.
 
 ### 4.1 — Conexão com X
-- [ ] Puppeteer com cookies de sessão (sem API oficial, sem limites de API)
-- [ ] Login persistente via cookies salvos
-- [ ] Funções básicas:
+- [x] Puppeteer com cookies de sessão (sem API oficial, sem limites de API)
+- [x] Login persistente via cookies salvos
+- [x] Funções básicas:
   - Ler timeline (home, following, for you)
   - Ler perfil de alguém
   - Ler trending topics
