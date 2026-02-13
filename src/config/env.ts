@@ -28,6 +28,7 @@ interface EnvConfig {
 
   // Telegram
   TELEGRAM_BOT_TOKEN?: string;
+  TELEGRAM_ENABLED: string;
   WHATSAPP_ENABLED: string;
   WHATSAPP_AUTH_DIR: string;
 
@@ -80,6 +81,7 @@ export const env: EnvConfig = {
 
   // Telegram
   TELEGRAM_BOT_TOKEN: getEnv('TELEGRAM_BOT_TOKEN', ''),
+  TELEGRAM_ENABLED: getEnv('TELEGRAM_ENABLED', 'false'),
   WHATSAPP_ENABLED: getEnv('WHATSAPP_ENABLED', 'false'),
   WHATSAPP_AUTH_DIR: getEnv('WHATSAPP_AUTH_DIR', 'data/whatsapp-auth'),
 

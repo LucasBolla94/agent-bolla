@@ -1,9 +1,11 @@
 import { env } from '../config/env.js';
 import { permissions } from '../core/permissions.js';
+import { CodeImprovementsRepository } from '../database/repositories/code-improvements.js';
 import { ConversationsRepository } from '../database/repositories/conversations.js';
 import { UsersRepository } from '../database/repositories/users.js';
 import { MemoryService } from '../memory/service.js';
 import { RagService } from '../memory/rag.js';
+import { TelegramGrammYChannel } from './telegram.js';
 import { WhatsAppBaileysChannel } from './whatsapp.js';
 
 export const createWhatsAppChannel = (rag: RagService, memory: MemoryService): WhatsAppBaileysChannel => {
@@ -22,6 +24,28 @@ export const createWhatsAppChannel = (rag: RagService, memory: MemoryService): W
       usersRepo,
       conversationsRepo,
       permissions
+    }
+  );
+};
+
+export const createTelegramChannel = (rag: RagService, memory: MemoryService): TelegramGrammYChannel => {
+  const usersRepo = new UsersRepository();
+  const conversationsRepo = new ConversationsRepository();
+  const codeImprovementsRepo = new CodeImprovementsRepository();
+
+  return new TelegramGrammYChannel(
+    {
+      enabled: env.TELEGRAM_ENABLED === 'true',
+      botToken: env.TELEGRAM_BOT_TOKEN || '',
+      ownerTelegramId: env.OWNER_TELEGRAM_ID || ''
+    },
+    {
+      rag,
+      memory,
+      usersRepo,
+      conversationsRepo,
+      permissions,
+      codeImprovementsRepo
     }
   );
 };

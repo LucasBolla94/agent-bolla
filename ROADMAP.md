@@ -117,11 +117,11 @@
 - [x] Enviar notificações pro dono (aprovações de código, alertas)
 
 ### 3.2 — Telegram
-- [ ] Bot via grammY framework
-- [ ] Mesma lógica de identificação (telegram_id na tabela users)
-- [ ] Suportar botões inline para aprovações (aprovar/rejeitar código)
-- [ ] Comandos com `/` (Telegram nativo)
-- [ ] Suportar grupos (responder quando mencionado)
+- [x] Bot via grammY framework
+- [x] Mesma lógica de identificação (telegram_id na tabela users)
+- [x] Suportar botões inline para aprovações (aprovar/rejeitar código)
+- [x] Comandos com `/` (Telegram nativo)
+- [x] Suportar grupos (responder quando mencionado)
 
 ### 3.3 — Sistema de Permissões
 - [ ] Middleware de permissão antes de processar qualquer mensagem
