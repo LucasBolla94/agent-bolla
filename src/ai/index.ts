@@ -2,7 +2,10 @@ import { env } from '../config/env.js';
 import { AnthropicClient } from './anthropic.js';
 import { GrokClient } from './grok.js';
 import { OllamaClient } from './ollama.js';
+import { AiRouter } from './router.js';
 import { AiTextClient } from './types.js';
+
+export { AiRouter };
 
 export interface AiClients {
   ollama: OllamaClient;
@@ -21,3 +24,5 @@ export const createAiClients = (): AiClients => {
     grok
   };
 };
+
+export const createRouter = (clients: AiClients): AiRouter => new AiRouter(clients);

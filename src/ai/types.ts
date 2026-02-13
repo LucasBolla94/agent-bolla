@@ -28,3 +28,14 @@ export interface RetryConfig {
   baseDelayMs: number;
   maxDelayMs: number;
 }
+
+export type TaskComplexity = 'simple' | 'medium' | 'complex';
+
+export interface RouterInput extends GenerateTextInput {
+  complexity?: TaskComplexity;
+}
+
+export interface RouterOutput extends GenerateTextOutput {
+  complexity: TaskComplexity;
+  fallbackUsed: boolean;
+}

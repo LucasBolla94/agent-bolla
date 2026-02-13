@@ -45,12 +45,12 @@
   - Usado como alternativa/segunda opinião
 
 ### 1.2 — AI Router (roteador inteligente)
-- [ ] Classificar complexidade da tarefa (Llama local faz isso)
+- [x] Classificar complexidade da tarefa (Llama local faz isso)
   - Simples → Llama local (saudações, classificação, sim/não)
   - Médio → Grok (conversas, opiniões)
   - Complexo → Anthropic (código, análise profunda, geração criativa)
-- [ ] Fallback automático: se um falha, tenta o próximo
-- [ ] Logging de qual AI foi usada e tempo de resposta
+- [x] Fallback automático: se um falha, tenta o próximo
+- [x] Logging de qual AI foi usada e tempo de resposta
 
 ### 1.3 — Training Data Collector
 - [ ] Middleware que intercepta TODA interação do agent
