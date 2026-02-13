@@ -104,17 +104,17 @@
 > O agent se conecta ao mundo.
 
 ### 3.1 — WhatsApp (Baileys)
-- [ ] Conectar via Baileys (QR code na primeira vez)
-- [ ] Persistir sessão (não pedir QR toda vez)
-- [ ] Receber mensagens de texto
-- [ ] Identificar remetente:
+- [x] Conectar via Baileys (QR code na primeira vez)
+- [x] Persistir sessão (não pedir QR toda vez)
+- [x] Receber mensagens de texto
+- [x] Identificar remetente:
   - Comparar número com tabela `users`
   - Se `role = owner` → acesso total
   - Se `role = user` → acesso limitado
   - Se desconhecido → registrar como user e responder normalmente
-- [ ] Processar mensagem pelo pipeline: permissões → RAG → AI → resposta → salvar treino
-- [ ] Suportar comandos do dono (prefixo `!`)
-- [ ] Enviar notificações pro dono (aprovações de código, alertas)
+- [x] Processar mensagem pelo pipeline: permissões → RAG → AI → resposta → salvar treino
+- [x] Suportar comandos do dono (prefixo `!`)
+- [x] Enviar notificações pro dono (aprovações de código, alertas)
 
 ### 3.2 — Telegram
 - [ ] Bot via grammY framework

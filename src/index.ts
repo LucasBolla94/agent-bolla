@@ -1,5 +1,6 @@
 import { env } from './config/env.js';
 import { createAiClients, createRouter } from './ai/index.js';
+import { createWhatsAppChannel } from './channels/index.js';
 import { db } from './database/connection.js';
 import { runMigrations } from './database/migrate.js';
 import { createMemoryService, createRagService } from './memory/index.js';
@@ -51,19 +52,25 @@ async function main(): Promise<void> {
       collector,
       shortTermLimit: 10,
       options: {
-        personalityProvider: async () => personality.buildSystemPrompt(),
-      },
+        personalityProvider: async () => personality.buildSystemPrompt()
+      }
     });
     console.log('RAG service ready (keywords + memory retrieval + short-term context).');
 
+    // WhatsApp channel (phase 3.1)
+    const whatsapp = createWhatsAppChannel(rag, memory);
+    await whatsapp.start();
+    console.log(`WhatsApp channel initialized (enabled=${env.WHATSAPP_ENABLED}).`);
+
     console.log('Agent Bolla initialized successfully!');
-    console.log('Phases 1.1 / 1.2 / 1.3 / 2.1 / 2.2 / 2.3 complete.');
+    console.log('Phases 1.1 / 1.2 / 1.3 / 2.1 / 2.2 / 2.3 / 3.1 complete.');
 
     // Expose for use in subsequent phases
     void router;
     void memory;
     void rag;
     void personality;
+    void whatsapp;
 
   } catch (error) {
     console.error('Error initializing agent:', error);
