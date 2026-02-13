@@ -73,6 +73,30 @@ export class TelegramGrammYChannel implements TelegramChannel {
   }
 
   private registerHandlers(bot: Bot<Context>): void {
+    bot.use(async (ctx, next) => {
+      const text = this.extractUpdateText(ctx);
+      if (!text) {
+        await next();
+        return;
+      }
+
+      const user = await this.getOrCreateTelegramUser(ctx);
+      if (!user) {
+        await next();
+        return;
+      }
+
+      const permission = this.deps.permissions.authorizeInput(user.role, text, 'telegram');
+      if (!permission.allowed) {
+        if (ctx.chat?.id) {
+          await ctx.reply(permission.reason || 'Sem permissao.');
+        }
+        return;
+      }
+
+      await next();
+    });
+
     bot.command('start', async (ctx) => {
       await ctx.reply('Bot online. Envie uma mensagem para conversar.');
     });
@@ -110,12 +134,6 @@ export class TelegramGrammYChannel implements TelegramChannel {
     const user = await this.getOrCreateTelegramUser(ctx);
     if (!user) return;
 
-    const permission = this.deps.permissions.canUseCommand(user.role, commandText);
-    if (!permission.allowed) {
-      await ctx.reply(permission.reason || 'Sem permissao.');
-      return;
-    }
-
     if (commandText === '/status') {
       await ctx.reply('Agent online. Telegram conectado e pipeline RAG ativo.');
       return;
@@ -128,13 +146,12 @@ export class TelegramGrammYChannel implements TelegramChannel {
   }
 
   private async handleApprovalCommand(ctx: Context): Promise<void> {
-    const user = await this.getOrCreateTelegramUser(ctx);
+    let user = await this.getOrCreateTelegramUser(ctx);
     if (!user) return;
 
-    const permission = this.deps.permissions.canUseCommand(user.role, '/approval');
-    if (!permission.allowed) {
-      await ctx.reply(permission.reason || 'Sem permissao.');
-      return;
+    if (this.config.ownerTelegramId && String(ctx.from?.id || '') === this.config.ownerTelegramId && user.role !== 'owner') {
+      const promoted = await this.deps.usersRepo.updateRole(user.id, 'owner');
+      if (promoted) user = promoted;
     }
 
     const text = ctx.message?.text || '';
@@ -166,11 +183,16 @@ export class TelegramGrammYChannel implements TelegramChannel {
     const callbackData = ctx.callbackQuery?.data;
     if (!callbackData) return;
 
-    const user = await this.getOrCreateTelegramUser(ctx);
+    let user = await this.getOrCreateTelegramUser(ctx);
     if (!user) return;
 
-    const permission = this.deps.permissions.canUseCommand(user.role, '/approval');
-    if (!permission.allowed) {
+    if (this.config.ownerTelegramId && String(ctx.from?.id || '') === this.config.ownerTelegramId && user.role !== 'owner') {
+      const promoted = await this.deps.usersRepo.updateRole(user.id, 'owner');
+      if (promoted) user = promoted;
+    }
+
+    const permission = this.deps.permissions.authorizeInput(user.role, '/approval', 'telegram');
+    if (!permission.allowed || user.role !== 'owner') {
       await ctx.answerCallbackQuery({ text: 'Sem permissao.', show_alert: true });
       return;
     }
@@ -214,8 +236,13 @@ export class TelegramGrammYChannel implements TelegramChannel {
       return;
     }
 
-    const user = await this.getOrCreateTelegramUser(ctx);
+    let user = await this.getOrCreateTelegramUser(ctx);
     if (!user) return;
+
+    if (this.config.ownerTelegramId && String(ctx.from?.id || '') === this.config.ownerTelegramId && user.role !== 'owner') {
+      const promoted = await this.deps.usersRepo.updateRole(user.id, 'owner');
+      if (promoted) user = promoted;
+    }
 
     const conversation = await this.deps.conversationsRepo.getOrCreate(user.id, 'telegram');
 
@@ -285,5 +312,11 @@ export class TelegramGrammYChannel implements TelegramChannel {
       ownerTelegramId: this.config.ownerTelegramId,
       name: displayName
     });
+  }
+
+  private extractUpdateText(ctx: Context): string {
+    if (ctx.message?.text) return ctx.message.text.trim();
+    if (ctx.callbackQuery?.data) return ctx.callbackQuery.data.trim();
+    return '';
   }
 }

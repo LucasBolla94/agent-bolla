@@ -72,6 +72,19 @@ export class UsersRepository {
     return toUserRecord(result.rows[0]);
   }
 
+  async updateRole(userId: number, role: UserRole): Promise<UserRecord | null> {
+    const result = await db.query<UserRow>(
+      `UPDATE users
+       SET role = $1
+       WHERE id = $2
+       RETURNING *`,
+      [role, userId]
+    );
+
+    const row = result.rows[0];
+    return row ? toUserRecord(row) : null;
+  }
+
   async getOrCreateByPhone(input: { phone: string; ownerPhone?: string; name?: string }): Promise<UserRecord> {
     const existing = await this.findByPhone(input.phone);
     if (existing) return existing;

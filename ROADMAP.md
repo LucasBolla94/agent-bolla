@@ -124,12 +124,12 @@
 - [x] Suportar grupos (responder quando mencionado)
 
 ### 3.3 — Sistema de Permissões
-- [ ] Middleware de permissão antes de processar qualquer mensagem
-- [ ] Níveis:
+- [x] Middleware de permissão antes de processar qualquer mensagem
+- [x] Níveis:
   - `owner`: tudo liberado
   - `user`: conversa + perguntas gerais + status básico
-- [ ] Comandos sensíveis retornam "Sem permissão" para users normais
-- [ ] Owner identificado por:
+- [x] Comandos sensíveis retornam "Sem permissão" para users normais
+- [x] Owner identificado por:
   - WhatsApp: número de telefone no .env (OWNER_WHATSAPP)
   - Telegram: user ID no .env (OWNER_TELEGRAM_ID)
 

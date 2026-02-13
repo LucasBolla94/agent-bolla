@@ -122,15 +122,20 @@ export class WhatsAppBaileysChannel implements WhatsAppChannel {
     if (!incomingText) return;
 
     const phone = this.normalizePhone(message.key.remoteJid.split('@')[0]);
-    const user = await this.deps.usersRepo.getOrCreateByPhone({
+    let user = await this.deps.usersRepo.getOrCreateByPhone({
       phone,
       ownerPhone: this.normalizePhone(this.config.ownerPhone),
       name: `WhatsApp ${phone}`
     });
 
+    if (this.config.ownerPhone && phone === this.normalizePhone(this.config.ownerPhone) && user.role !== 'owner') {
+      const promoted = await this.deps.usersRepo.updateRole(user.id, 'owner');
+      if (promoted) user = promoted;
+    }
+
     const conversation = await this.deps.conversationsRepo.getOrCreate(user.id, 'whatsapp');
 
-    const permission = this.deps.permissions.canUseCommand(user.role, incomingText);
+    const permission = this.deps.permissions.authorizeInput(user.role, incomingText, 'whatsapp');
     if (!permission.allowed) {
       await this.replyAndPersist({
         jid: message.key.remoteJid,
@@ -142,7 +147,7 @@ export class WhatsAppBaileysChannel implements WhatsAppChannel {
     }
 
     if (incomingText.startsWith('!')) {
-      const commandResponse = await this.handleOwnerCommand(incomingText, user);
+      const commandResponse = await this.handleCommand(incomingText, user);
       await this.replyAndPersist({
         jid: message.key.remoteJid,
         conversationId: conversation.id,
@@ -177,11 +182,7 @@ export class WhatsAppBaileysChannel implements WhatsAppChannel {
     );
   }
 
-  private async handleOwnerCommand(commandText: string, user: UserRecord): Promise<string> {
-    if (user.role !== 'owner') {
-      return 'Sem permissao para esse comando.';
-    }
-
+  private async handleCommand(commandText: string, user: UserRecord): Promise<string> {
     const command = commandText.trim().toLowerCase();
 
     if (command === '!status') {
@@ -193,10 +194,13 @@ export class WhatsAppBaileysChannel implements WhatsAppChannel {
     }
 
     if (command === '!help') {
-      return 'Comandos owner: !status, !ping, !help';
+      if (user.role === 'owner') {
+        return 'Comandos owner: !status, !ping, !help';
+      }
+      return 'Comandos disponíveis: !status, !ping, !help';
     }
 
-    return 'Comando nao reconhecido. Use !help';
+    return 'Comando sensível ou não reconhecido. Use !help';
   }
 
   private async replyAndPersist(input: {
