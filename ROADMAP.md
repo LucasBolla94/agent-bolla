@@ -326,9 +326,9 @@ Bolla precisa ser cinco coisas:
 - [x] Notifica o dono com o IP/status do novo agent
 
 ### 11.3 — Agent Network (Bus de Comunicação)
-- [ ] Cada agent expõe uma mini API HTTP local (porta configurável)
-- [ ] Agent principal pode delegar tarefas para agents na rede
-- [ ] "Hive mode": múltiplas instâncias com personalidades especializadas
+- [x] Cada agent expõe uma mini API HTTP local (porta configurável)
+- [x] Agent principal pode delegar tarefas para agents na rede
+- [x] "Hive mode": múltiplas instâncias com personalidades especializadas
 
 **Entregável**: Agent que se replica, mantém backup e coordena com outros agents.
 

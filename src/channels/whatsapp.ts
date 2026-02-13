@@ -15,6 +15,7 @@ import { UserRecord, UsersRepository } from '../database/repositories/users.js';
 import { PermissionService } from '../core/permissions.js';
 import { SelfImprovementService } from '../self-improvement/service.js';
 import { AnalyticsService } from '../analytics/service.js';
+import { HiveNetwork } from '../hive/index.js';
 
 export interface WhatsAppChannelConfig {
   authDir: string;
@@ -28,6 +29,7 @@ export interface WhatsAppChannelDeps {
   personality: PersonalityService;
   selfImprovement: SelfImprovementService;
   analytics: AnalyticsService;
+  hive?: HiveNetwork;
   usersRepo: UsersRepository;
   conversationsRepo: ConversationsRepository;
   permissions: PermissionService;
@@ -252,7 +254,8 @@ export class WhatsAppBaileysChannel implements WhatsAppChannel {
           '!personalidade set <trait> <valor> — editar trait\n' +
           '!code analyze — rodar ciclo de auto-melhoria\n' +
           '!approval approve <id> | !approval reject <id>\n' +
-          '!analytics [suggest|approve <id>|reject <id>]'
+          '!analytics [suggest|approve <id>|reject <id>]\n' +
+          '!hive [status|peers|ask <peer> <tarefa>|role <role> <tarefa>]'
         );
       }
       return 'Comandos: !status, !ping, !help';
@@ -345,6 +348,52 @@ export class WhatsAppBaileysChannel implements WhatsAppChannel {
       }
 
       return 'Uso: !analytics | !analytics suggest | !analytics pending | !analytics approve <id> | !analytics reject <id>';
+    }
+
+    if (cmd === '!hive') {
+      const hive = this.deps.hive;
+      if (!hive) return 'Hive indisponível.';
+
+      const sub = parts[1]?.toLowerCase();
+
+      if (!sub || sub === 'status') {
+        const status = hive.status();
+        return (
+          `Hive: ${status.enabled ? 'enabled' : 'disabled'}\n` +
+          `Agent: ${status.agentName} (${status.role})\n` +
+          `Listening: ${status.listening}\n` +
+          `Port: ${status.port}\n` +
+          `Peers: ${status.peers.length}`
+        );
+      }
+
+      if (sub === 'peers') {
+        const peers = hive.status().peers;
+        if (peers.length === 0) return 'Sem peers configurados.';
+        return peers.map((peer) => `- ${peer.name} [${peer.role}] ${peer.baseUrl}`).join('\n');
+      }
+
+      if (sub === 'ask' && parts[2] && parts.length > 3) {
+        const peerName = parts[2];
+        const task = parts.slice(3).join(' ').trim();
+        if (!task) return 'Uso: !hive ask <peer> <tarefa>';
+
+        const result = await hive.delegateToPeer(peerName, task, 'complex');
+        if (!result.ok) return `Falha: ${result.error || 'erro desconhecido'}`;
+        return `[${result.agent}/${result.role}] ${result.response.slice(0, 1400)}`;
+      }
+
+      if (sub === 'role' && parts[2] && parts.length > 3) {
+        const role = parts[2];
+        const task = parts.slice(3).join(' ').trim();
+        if (!task) return 'Uso: !hive role <role> <tarefa>';
+
+        const result = await hive.delegateToRole(role, task, 'complex');
+        if (!result.ok) return `Falha: ${result.error || 'erro desconhecido'}`;
+        return `[${result.agent}/${result.role}] ${result.response.slice(0, 1400)}`;
+      }
+
+      return 'Uso: !hive [status|peers|ask <peer> <tarefa>|role <role> <tarefa>]';
     }
 
     return 'Comando não reconhecido. Use !help';

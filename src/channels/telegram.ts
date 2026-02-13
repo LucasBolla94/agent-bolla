@@ -8,6 +8,7 @@ import { PermissionService } from '../core/permissions.js';
 import { CodeImprovementsRepository } from '../database/repositories/code-improvements.js';
 import { SelfImprovementService } from '../self-improvement/service.js';
 import { AnalyticsService } from '../analytics/service.js';
+import { HiveNetwork } from '../hive/index.js';
 
 export interface TelegramChannelConfig {
   enabled: boolean;
@@ -21,6 +22,7 @@ export interface TelegramChannelDeps {
   personality: PersonalityService;
   selfImprovement: SelfImprovementService;
   analytics: AnalyticsService;
+  hive?: HiveNetwork;
   usersRepo: UsersRepository;
   conversationsRepo: ConversationsRepository;
   permissions: PermissionService;
@@ -138,7 +140,8 @@ export class TelegramGrammYChannel implements TelegramChannel {
           '/personalidade_set <trait> <valor> — editar trait\n' +
           '/approval <id> — revisar melhoria de código\n' +
           '/code_analyze — rodar ciclo de auto-melhoria\n' +
-          '/analytics [suggest|pending|approve <id>|reject <id>]'
+          '/analytics [suggest|pending|approve <id>|reject <id>]\n' +
+          '/hive [status|peers|ask <peer> <tarefa>|role <role> <tarefa>]'
         );
       } else {
         await ctx.reply('Comandos: /start, /help, /status, /ping');
@@ -175,6 +178,10 @@ export class TelegramGrammYChannel implements TelegramChannel {
 
     bot.command('analytics', async (ctx) => {
       await this.handleAnalyticsCommand(ctx);
+    });
+
+    bot.command('hive', async (ctx) => {
+      await this.handleHiveCommand(ctx);
     });
 
     bot.on('callback_query:data', async (ctx) => {
@@ -428,6 +435,92 @@ export class TelegramGrammYChannel implements TelegramChannel {
     }
 
     await ctx.reply('Uso: /analytics [suggest|pending|approve <id>|reject <id>]');
+  }
+
+  private async handleHiveCommand(ctx: Context): Promise<void> {
+    let user = await this.getOrCreateTelegramUser(ctx);
+    if (!user) return;
+
+    if (this.config.ownerTelegramId && String(ctx.from?.id || '') === this.config.ownerTelegramId && user.role !== 'owner') {
+      const promoted = await this.deps.usersRepo.updateRole(user.id, 'owner');
+      if (promoted) user = promoted;
+    }
+
+    if (user.role !== 'owner') {
+      await ctx.reply('Sem permissão.');
+      return;
+    }
+
+    const hive = this.deps.hive;
+    if (!hive) {
+      await ctx.reply('Hive indisponível.');
+      return;
+    }
+
+    const text = ctx.message?.text || '/hive';
+    const parts = text.trim().split(/\s+/);
+    const sub = parts[1]?.toLowerCase();
+
+    if (!sub || sub === 'status') {
+      const status = hive.status();
+      await ctx.reply(
+        `Hive: ${status.enabled ? 'enabled' : 'disabled'}\n` +
+        `Agent: ${status.agentName} (${status.role})\n` +
+        `Listening: ${status.listening}\n` +
+        `Port: ${status.port}\n` +
+        `Peers: ${status.peers.length}`
+      );
+      return;
+    }
+
+    if (sub === 'peers') {
+      const peers = hive.status().peers;
+      if (peers.length === 0) {
+        await ctx.reply('Sem peers configurados.');
+        return;
+      }
+
+      await ctx.reply(peers.map((peer) => `- ${peer.name} [${peer.role}] ${peer.baseUrl}`).join('\n'));
+      return;
+    }
+
+    if (sub === 'ask' && parts[2] && parts.length > 3) {
+      const peerName = parts[2];
+      const task = parts.slice(3).join(' ').trim();
+      if (!task) {
+        await ctx.reply('Uso: /hive ask <peer> <tarefa>');
+        return;
+      }
+
+      const result = await hive.delegateToPeer(peerName, task, 'complex');
+      if (!result.ok) {
+        await ctx.reply(`Falha: ${result.error || 'erro desconhecido'}`);
+        return;
+      }
+
+      await ctx.reply(`[${result.agent}/${result.role}] ${result.response.slice(0, 3500)}`);
+      return;
+    }
+
+    if (sub === 'role' && parts[2] && parts.length > 3) {
+      const role = parts[2];
+      const task = parts.slice(3).join(' ').trim();
+      if (!task) {
+        await ctx.reply('Uso: /hive role <role> <tarefa>');
+        return;
+      }
+
+      const result = await hive.delegateToRole(role, task, 'complex');
+      if (!result.ok) {
+        await ctx.reply(`Falha: ${result.error || 'erro desconhecido'}`);
+        return;
+      }
+
+      await ctx.reply(`[${result.agent}/${result.role}] ${result.response.slice(0, 3500)}`);
+      return;
+    }
+
+    await ctx.reply('Uso: /hive [status|peers|ask <peer> <tarefa>|role <role> <tarefa>]');
   }
 
   private async handleTextMessage(ctx: Context): Promise<void> {

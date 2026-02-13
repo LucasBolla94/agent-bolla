@@ -12,6 +12,7 @@ import { createSelfImprovementService } from './self-improvement/index.js';
 import { AnalyticsService, createAnalyticsScheduler } from './analytics/index.js';
 import { PersonalitySuggestionsRepository } from './database/repositories/personality-suggestions.js';
 import { collector } from './training/index.js';
+import { createHiveNetwork } from './hive/index.js';
 import {
   createHealthDependencies,
   createHealthMonitor,
@@ -85,8 +86,37 @@ async function main(): Promise<void> {
     const analyticsScheduler = createAnalyticsScheduler(analyticsService);
     console.log(`Analytics service initialized (enabled=${env.ANALYTICS_AUTONOMOUS_ENABLED}).`);
 
+    const hive = createHiveNetwork({
+      run: async (task, context) => {
+        const requester = context?.requester || 'unknown';
+        const role = env.HIVE_AGENT_ROLE || 'generalist';
+        const framedTask = [
+          `Você está operando em hive mode como agente com especialidade: ${role}.`,
+          `Requester: ${requester}`,
+          `Tarefa: ${task}`
+        ].join('\n');
+
+        const result = await rag.respond(framedTask, {
+          conversationId: `hive:${Date.now()}`,
+          source: 'internal',
+          channel: 'internal',
+          userRole: 'owner',
+          topic: 'hive_delegation',
+          complexity: context?.complexity
+        });
+
+        return result.text;
+      }
+    });
+    await withRetry('hive.start', async () => hive.start(), {
+      attempts: 3,
+      baseDelayMs: 1200,
+      maxDelayMs: 10000
+    });
+    console.log(`Hive network initialized (enabled=${env.HIVE_ENABLED}).`);
+
     // WhatsApp channel (phase 3.1)
-    const whatsapp = createWhatsAppChannel(rag, memory, personality, selfImprovement, analyticsService);
+    const whatsapp = createWhatsAppChannel(rag, memory, personality, selfImprovement, analyticsService, hive);
     await withRetry('whatsapp.start', async () => whatsapp.start(), {
       attempts: 5,
       baseDelayMs: 1000,
@@ -95,7 +125,7 @@ async function main(): Promise<void> {
     console.log(`WhatsApp channel initialized (enabled=${env.WHATSAPP_ENABLED}).`);
 
     // Telegram channel (phase 3.2)
-    const telegram = createTelegramChannel(rag, memory, personality, selfImprovement, analyticsService);
+    const telegram = createTelegramChannel(rag, memory, personality, selfImprovement, analyticsService, hive);
     await withRetry('telegram.start', async () => telegram.start(), {
       attempts: 5,
       baseDelayMs: 1000,
@@ -187,7 +217,7 @@ async function main(): Promise<void> {
     maintenance.start();
 
     console.log('Agent Bolla initialized successfully!');
-    console.log('Phases 1.1 / 1.2 / 1.3 / 2.1 / 2.2 / 2.3 / 3.1 / 3.2 / 3.3 / 4.1 / 4.2 / 4.3 / 5.1 / 5.2 / 5.3 / 6 / 7 / 8 complete.');
+    console.log('Phases 1.1 / 1.2 / 1.3 / 2.1 / 2.2 / 2.3 / 3.1 / 3.2 / 3.3 / 4.1 / 4.2 / 4.3 / 5.1 / 5.2 / 5.3 / 6 / 7 / 8 / 11.3 complete.');
 
     // Expose for use in subsequent phases
     void router;
@@ -204,6 +234,7 @@ async function main(): Promise<void> {
     void selfImprovement;
     void analyticsService;
     void analyticsScheduler;
+    void hive;
     void healthMonitor;
     void maintenance;
 

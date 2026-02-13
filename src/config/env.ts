@@ -66,6 +66,14 @@ interface EnvConfig {
   CLEANUP_INTERVAL_HOURS: string;
   CLEANUP_TRAINING_RETENTION_DAYS: string;
   CLEANUP_QUALITY_THRESHOLD: string;
+  HIVE_ENABLED: string;
+  HIVE_BIND_HOST: string;
+  HIVE_PORT: string;
+  HIVE_AGENT_NAME: string;
+  HIVE_AGENT_ROLE: string;
+  HIVE_SHARED_TOKEN: string;
+  HIVE_PEERS_JSON: string;
+  HIVE_REQUEST_TIMEOUT_MS: string;
 
   // v1.2 — Tools + Agent Loop
   FORCE_LOCAL: string;
@@ -162,6 +170,14 @@ export const env: EnvConfig = {
   CLEANUP_INTERVAL_HOURS: getEnv('CLEANUP_INTERVAL_HOURS', '12'),
   CLEANUP_TRAINING_RETENTION_DAYS: getEnv('CLEANUP_TRAINING_RETENTION_DAYS', '30'),
   CLEANUP_QUALITY_THRESHOLD: getEnv('CLEANUP_QUALITY_THRESHOLD', '0.45'),
+  HIVE_ENABLED: getEnv('HIVE_ENABLED', 'false'),
+  HIVE_BIND_HOST: getEnv('HIVE_BIND_HOST', '0.0.0.0'),
+  HIVE_PORT: getEnv('HIVE_PORT', '8787'),
+  HIVE_AGENT_NAME: getEnv('HIVE_AGENT_NAME', 'bolla-main'),
+  HIVE_AGENT_ROLE: getEnv('HIVE_AGENT_ROLE', 'generalist'),
+  HIVE_SHARED_TOKEN: getEnv('HIVE_SHARED_TOKEN', ''),
+  HIVE_PEERS_JSON: getEnv('HIVE_PEERS_JSON', '[]'),
+  HIVE_REQUEST_TIMEOUT_MS: getEnv('HIVE_REQUEST_TIMEOUT_MS', '45000'),
 
   // v1.2 — Tools + Agent Loop
   FORCE_LOCAL: getEnv('FORCE_LOCAL', 'false'),
