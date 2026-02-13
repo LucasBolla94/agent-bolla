@@ -2,7 +2,7 @@ import { env } from './config/env.js';
 import { createAiClients, createRouter } from './ai/index.js';
 import { db } from './database/connection.js';
 import { runMigrations } from './database/migrate.js';
-import { createMemoryService } from './memory/index.js';
+import { createMemoryService, createRagService } from './memory/index.js';
 import { collector } from './training/index.js';
 
 async function main(): Promise<void> {
@@ -25,7 +25,7 @@ async function main(): Promise<void> {
     const availableProviders = [
       aiClients.ollama.provider,
       aiClients.anthropic?.provider,
-      aiClients.grok?.provider,
+      aiClients.grok?.provider
     ].filter(Boolean);
     console.log('AI clients initialized:', availableProviders.join(', '));
     console.log('AI router ready.');
@@ -39,12 +39,22 @@ async function main(): Promise<void> {
     const memoryCount = await memory.count();
     console.log(`Memory service ready. Memories stored: ${memoryCount}`);
 
+    // RAG runtime pipeline + short-term memory (phase 2.2)
+    const rag = createRagService({
+      memoryService: memory,
+      router,
+      collector,
+      shortTermLimit: 10
+    });
+    console.log('RAG service ready (keywords + memory retrieval + short-term context).');
+
     console.log('Agent Bolla initialized successfully!');
-    console.log('Phases 1.1 / 1.2 / 1.3 / 2.1 complete.');
+    console.log('Phases 1.1 / 1.2 / 1.3 / 2.1 / 2.2 complete.');
 
     // Expose for use in subsequent phases
     void router;
     void memory;
+    void rag;
 
   } catch (error) {
     console.error('Error initializing agent:', error);

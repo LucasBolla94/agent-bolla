@@ -82,12 +82,12 @@
 - [x] Busca por similaridade textual (pg_trgm ou busca full-text do PostgreSQL)
 
 ### 2.2 — RAG na prática
-- [ ] Antes de responder qualquer mensagem:
+- [x] Antes de responder qualquer mensagem:
   1. Extrair palavras-chave da mensagem
   2. Buscar memórias relevantes no PostgreSQL (top 5-10)
   3. Montar prompt: `[Personalidade] + [Memórias relevantes] + [Mensagem]`
   4. Enviar para a AI escolhida pelo Router
-- [ ] Memória de curto prazo: manter últimas 10 mensagens da conversa atual em memória
+- [x] Memória de curto prazo: manter últimas 10 mensagens da conversa atual em memória
 
 ### 2.3 — Personalidade persistente
 - [ ] Tabela `personality` com traits:
