@@ -74,12 +74,12 @@
 > O agent ganha seu "caderno" — lembra de tudo.
 
 ### 2.1 — Memória de longo prazo
-- [ ] Ao salvar qualquer dado, extrair "fatos" relevantes:
+- [x] Ao salvar qualquer dado, extrair "fatos" relevantes:
   - "User Lucas prefere TypeScript"
   - "Aprendi que Bun é mais rápido que Node para scripts"
   - "Minha opinião sobre React: bom mas verboso"
-- [ ] Salvar fatos na tabela `memories` com categoria e texto de busca
-- [ ] Busca por similaridade textual (pg_trgm ou busca full-text do PostgreSQL)
+- [x] Salvar fatos na tabela `memories` com categoria e texto de busca
+- [x] Busca por similaridade textual (pg_trgm ou busca full-text do PostgreSQL)
 
 ### 2.2 — RAG na prática
 - [ ] Antes de responder qualquer mensagem:

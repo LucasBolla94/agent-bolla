@@ -1,5 +1,6 @@
 import { db } from './connection.js';
 import * as migration001 from './migrations/001_create_tables.js';
+import * as migration002 from './migrations/002_fix_memory_index.js';
 
 interface Migration {
   id: number;
@@ -14,6 +15,12 @@ const migrations: Migration[] = [
     name: '001_create_tables',
     up: migration001.up,
     down: migration001.down
+  },
+  {
+    id: 2,
+    name: '002_fix_memory_index',
+    up: migration002.up,
+    down: migration002.down
   }
 ];
 

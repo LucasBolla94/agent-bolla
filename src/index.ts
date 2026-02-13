@@ -2,6 +2,7 @@ import { env } from './config/env.js';
 import { createAiClients, createRouter } from './ai/index.js';
 import { db } from './database/connection.js';
 import { runMigrations } from './database/migrate.js';
+import { createMemoryService } from './memory/index.js';
 import { collector } from './training/index.js';
 
 async function main(): Promise<void> {
@@ -33,11 +34,17 @@ async function main(): Promise<void> {
     const stats = await collector.stats();
     console.log(`Training data collector ready. Entries so far: ${stats.total}`);
 
+    // Long-term memory service (phase 2.1)
+    const memory = createMemoryService(aiClients.ollama);
+    const memoryCount = await memory.count();
+    console.log(`Memory service ready. Memories stored: ${memoryCount}`);
+
     console.log('Agent Bolla initialized successfully!');
-    console.log('Phases 1.1 / 1.2 / 1.3 complete.');
+    console.log('Phases 1.1 / 1.2 / 1.3 / 2.1 complete.');
 
     // Expose for use in subsequent phases
     void router;
+    void memory;
 
   } catch (error) {
     console.error('Error initializing agent:', error);
