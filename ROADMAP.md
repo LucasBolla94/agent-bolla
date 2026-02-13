@@ -33,14 +33,14 @@
 > O agent pensa e já começa a salvar tudo para treino futuro.
 
 ### 1.1 — Clientes AI
-- [ ] Cliente Ollama (Llama 3.2:3b local)
+- [x] Cliente Ollama (Llama 3.2:3b local)
   - POST para `AI_API_URL` com model, prompt, stream
   - Timeout e retry
   - Fallback para Anthropic se Ollama estiver fora
-- [ ] Cliente Anthropic
+- [x] Cliente Anthropic
   - SDK oficial `@anthropic-ai/sdk`
   - Usado para: respostas complexas, análise de código, geração de tweets
-- [ ] Cliente Grok
+- [x] Cliente Grok
   - API REST
   - Usado como alternativa/segunda opinião
 

@@ -8,10 +8,15 @@ interface EnvConfig {
   AI_API_CONTENT_TYPE: string;
   AI_API_MODEL: string;
   AI_API_STREAM: string;
+  AI_TIMEOUT_MS: string;
+  AI_RETRY_ATTEMPTS: string;
   ANTHROPIC_API_KEY?: string;
+  ANTHROPIC_MODEL: string;
+  ANTHROPIC_MAX_TOKENS: string;
   GROK_API_KEY?: string;
   GROK_API_URL?: string;
-  GROK_MODEL?: string;
+  GROK_MODEL: string;
+  GROK_MAX_TOKENS: string;
 
   // Database
   DATABASE_URL: string;
@@ -53,10 +58,15 @@ export const env: EnvConfig = {
   AI_API_CONTENT_TYPE: getEnv('AI_API_CONTENT_TYPE', 'application/json'),
   AI_API_MODEL: getEnv('AI_API_MODEL', 'llama3.2:3b'),
   AI_API_STREAM: getEnv('AI_API_STREAM', 'false'),
+  AI_TIMEOUT_MS: getEnv('AI_TIMEOUT_MS', '30000'),
+  AI_RETRY_ATTEMPTS: getEnv('AI_RETRY_ATTEMPTS', '3'),
   ANTHROPIC_API_KEY: getEnv('ANTHROPIC_API_KEY', ''),
+  ANTHROPIC_MODEL: getEnv('ANTHROPIC_MODEL', 'claude-3-5-sonnet-latest'),
+  ANTHROPIC_MAX_TOKENS: getEnv('ANTHROPIC_MAX_TOKENS', '1024'),
   GROK_API_KEY: getEnv('GROK_API_KEY', ''),
   GROK_API_URL: getEnv('GROK_API_URL', ''),
   GROK_MODEL: getEnv('GROK_MODEL', 'grok-2'),
+  GROK_MAX_TOKENS: getEnv('GROK_MAX_TOKENS', '1024'),
 
   // Database
   DATABASE_URL: getEnv('DATABASE_URL', '', true),

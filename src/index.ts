@@ -1,4 +1,5 @@
 import { env } from './config/env.js';
+import { createAiClients } from './ai/index.js';
 import { db } from './database/connection.js';
 import { runMigrations } from './database/migrate.js';
 
@@ -17,8 +18,17 @@ async function main(): Promise<void> {
     console.log('Running database migrations...');
     await runMigrations();
 
+    // Initialize AI clients for phase 1.1
+    const aiClients = createAiClients();
+    const availableProviders = [
+      aiClients.ollama.provider,
+      aiClients.anthropic?.provider,
+      aiClients.grok?.provider
+    ].filter(Boolean);
+    console.log('AI clients initialized:', availableProviders.join(', '));
+
     console.log('✅ Agent Bolla initialized successfully!');
-    console.log('Ready to start phase 1 implementation.');
+    console.log('Fase 1.1 concluida: clientes de AI prontos.');
 
   } catch (error) {
     console.error('❌ Error initializing agent:', error);
