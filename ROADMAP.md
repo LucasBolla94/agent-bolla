@@ -147,9 +147,9 @@ Bolla precisa ser cinco coisas:
 > O agent ganha vontade própria — decide o que estudar, forma e evolui suas opiniões.
 
 ### 5.1 — Sistema de estudo autônomo
-- [ ] Scheduler de estudo: ler tweets de devs influentes, navegar por trends
-- [ ] Por sessão: escolher tópico → consumir conteúdo → resumir → salvar como memória
-- [ ] Registrar descobertas como `study_sessions` no banco
+- [x] Scheduler de estudo: ler tweets de devs influentes, navegar por trends
+- [x] Por sessão: escolher tópico → consumir conteúdo → resumir → salvar como memória
+- [x] Registrar descobertas como `study_sessions` no banco
 
 ### 5.2 — Sistema de curiosidade
 - [ ] Lista de interesses que evolui com o que lê e discute

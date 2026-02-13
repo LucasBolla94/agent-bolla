@@ -5,6 +5,8 @@ import { db } from './database/connection.js';
 import { runMigrations } from './database/migrate.js';
 import { createMemoryService, createRagService } from './memory/index.js';
 import { createPersonalityService } from './personality/index.js';
+import { createStudyAutonomousScheduler } from './autonomy/study.js';
+import { StudySessionsRepository } from './database/repositories/study-sessions.js';
 import { createTwitterAutonomousScheduler, createTwitterPlatform } from './platforms/index.js';
 import { collector } from './training/index.js';
 
@@ -83,8 +85,18 @@ async function main(): Promise<void> {
     twitterScheduler.start();
     console.log(`Twitter autonomous scheduler initialized (enabled=${env.TWITTER_AUTONOMOUS_ENABLED}).`);
 
+    const studyScheduler = createStudyAutonomousScheduler({
+      router,
+      twitter,
+      memory,
+      collector,
+      studySessionsRepo: new StudySessionsRepository()
+    });
+    studyScheduler.start();
+    console.log(`Study autonomous scheduler initialized (enabled=${env.STUDY_AUTONOMOUS_ENABLED}).`);
+
     console.log('Agent Bolla initialized successfully!');
-    console.log('Phases 1.1 / 1.2 / 1.3 / 2.1 / 2.2 / 2.3 / 3.1 / 3.2 / 3.3 / 4.1 / 4.2 complete.');
+    console.log('Phases 1.1 / 1.2 / 1.3 / 2.1 / 2.2 / 2.3 / 3.1 / 3.2 / 3.3 / 4.1 / 4.2 / 5.1 complete.');
 
     // Expose for use in subsequent phases
     void router;
@@ -95,6 +107,7 @@ async function main(): Promise<void> {
     void telegram;
     void twitter;
     void twitterScheduler;
+    void studyScheduler;
 
   } catch (error) {
     console.error('Error initializing agent:', error);

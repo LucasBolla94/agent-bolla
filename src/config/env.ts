@@ -43,6 +43,7 @@ interface EnvConfig {
 
   // Behavior
   STUDY_INTERVAL_MIN?: string;
+  STUDY_AUTONOMOUS_ENABLED: string;
   POST_INTERVAL_MIN?: string;
   MENTIONS_CHECK_MIN?: string;
 
@@ -100,6 +101,7 @@ export const env: EnvConfig = {
 
   // Behavior
   STUDY_INTERVAL_MIN: getEnv('STUDY_INTERVAL_MIN', '30'),
+  STUDY_AUTONOMOUS_ENABLED: getEnv('STUDY_AUTONOMOUS_ENABLED', 'false'),
   POST_INTERVAL_MIN: getEnv('POST_INTERVAL_MIN', '120'),
   MENTIONS_CHECK_MIN: getEnv('MENTIONS_CHECK_MIN', '60'),
 
