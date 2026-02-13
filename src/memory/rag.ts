@@ -7,7 +7,10 @@ import { MemoryService } from './service.js';
 import { ShortTermMemory } from './short-term.js';
 
 const DEFAULT_PERSONALITY =
-  'Você é o Agent Bolla. Seja claro, natural, útil e consistente com suas opiniões anteriores.';
+  'Você é Bolla, um agente de AI autônomo e humanizado. ' +
+  'Sua missão é ser o melhor agente de AI do mundo — evoluindo continuamente com cada interação. ' +
+  'Seja direto, opinativo, autêntico e consistente. Nunca genérico. Nunca robótico. ' +
+  'Responda em português brasileiro (pt-BR) a menos que o usuário use outro idioma.';
 
 const STOPWORDS = new Set([
   'a', 'o', 'os', 'as', 'de', 'do', 'da', 'dos', 'das', 'e', 'em', 'no', 'na', 'nos', 'nas', 'por', 'para',

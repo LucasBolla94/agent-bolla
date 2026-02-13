@@ -1,6 +1,7 @@
 import { Bot, Context, InlineKeyboard } from 'grammy';
 import { RagService } from '../memory/rag.js';
 import { MemoryService } from '../memory/service.js';
+import { PersonalityService } from '../personality/service.js';
 import { ConversationsRepository, ConversationMessage } from '../database/repositories/conversations.js';
 import { UserRecord, UsersRepository } from '../database/repositories/users.js';
 import { PermissionService } from '../core/permissions.js';
@@ -15,6 +16,7 @@ export interface TelegramChannelConfig {
 export interface TelegramChannelDeps {
   rag: RagService;
   memory: MemoryService;
+  personality: PersonalityService;
   usersRepo: UsersRepository;
   conversationsRepo: ConversationsRepository;
   permissions: PermissionService;
@@ -98,19 +100,45 @@ export class TelegramGrammYChannel implements TelegramChannel {
     });
 
     bot.command('start', async (ctx) => {
-      await ctx.reply('Bot online. Envie uma mensagem para conversar.');
+      const nome = this.deps.personality.get('nome');
+      await ctx.reply(`${nome} online. Envie uma mensagem para conversar.`);
     });
 
     bot.command('help', async (ctx) => {
-      await ctx.reply('Comandos: /start, /help, /status, /ping, /approval <id>');
+      const user = await this.getOrCreateTelegramUser(ctx);
+      if (user?.role === 'owner') {
+        await ctx.reply(
+          'Comandos owner:\n' +
+          '/status — estado atual\n' +
+          '/ping — latência\n' +
+          '/aprender <fato> — ensinar algo novo\n' +
+          '/personalidade — ver traits atuais\n' +
+          '/personalidade_set <trait> <valor> — editar trait\n' +
+          '/approval <id> — revisar melhoria de código'
+        );
+      } else {
+        await ctx.reply('Comandos: /start, /help, /status, /ping');
+      }
     });
 
     bot.command('status', async (ctx) => {
-      await this.handleCommand(ctx, '/status');
+      await this.handleStatusCommand(ctx);
     });
 
     bot.command('ping', async (ctx) => {
-      await this.handleCommand(ctx, '/ping');
+      await ctx.reply('pong');
+    });
+
+    bot.command('aprender', async (ctx) => {
+      await this.handleAprenderCommand(ctx);
+    });
+
+    bot.command('personalidade', async (ctx) => {
+      await this.handlePersonalidadeCommand(ctx);
+    });
+
+    bot.command('personalidade_set', async (ctx) => {
+      await this.handlePersonalidadeSetCommand(ctx);
     });
 
     bot.command('approval', async (ctx) => {
@@ -130,19 +158,68 @@ export class TelegramGrammYChannel implements TelegramChannel {
     });
   }
 
-  private async handleCommand(ctx: Context, commandText: string): Promise<void> {
+  private async handleStatusCommand(ctx: Context): Promise<void> {
+    const memCount = await this.deps.memory.count();
+    const nome = this.deps.personality.get('nome');
+    const humor = this.deps.personality.get('humor_atual');
+    await ctx.reply(`${nome} online.\nHumor: ${humor}\nMemórias: ${memCount}\nPipeline RAG ativo.`);
+  }
+
+  private async handleAprenderCommand(ctx: Context): Promise<void> {
     const user = await this.getOrCreateTelegramUser(ctx);
     if (!user) return;
 
-    if (commandText === '/status') {
-      await ctx.reply('Agent online. Telegram conectado e pipeline RAG ativo.');
+    if (user.role !== 'owner') {
+      await ctx.reply('Sem permissão.');
       return;
     }
 
-    if (commandText === '/ping') {
-      await ctx.reply('pong');
+    const text = ctx.message?.text || '';
+    const fact = text.replace(/^\/aprender\s*/i, '').trim();
+
+    if (!fact) {
+      await ctx.reply('Uso: /aprender <fato>');
       return;
     }
+
+    await this.deps.memory.saveRaw(fact, 'telegram', 'learned_fact');
+    await ctx.reply(`Aprendi e memorizei: "${fact}"`);
+  }
+
+  private async handlePersonalidadeCommand(ctx: Context): Promise<void> {
+    const user = await this.getOrCreateTelegramUser(ctx);
+    if (!user || user.role !== 'owner') {
+      await ctx.reply('Sem permissão.');
+      return;
+    }
+
+    const all = this.deps.personality.getAll();
+    const lines = Object.entries(all)
+      .map(([k, v]) => `<b>${k}</b>: ${v.slice(0, 120)}`)
+      .join('\n');
+
+    await ctx.reply(lines, { parse_mode: 'HTML' });
+  }
+
+  private async handlePersonalidadeSetCommand(ctx: Context): Promise<void> {
+    const user = await this.getOrCreateTelegramUser(ctx);
+    if (!user || user.role !== 'owner') {
+      await ctx.reply('Sem permissão.');
+      return;
+    }
+
+    const text = ctx.message?.text || '';
+    const parts = text.replace(/^\/personalidade_set\s*/i, '').trim().split(/\s+/);
+    const trait = parts[0]?.toLowerCase();
+    const value = parts.slice(1).join(' ').trim();
+
+    if (!trait || !value) {
+      await ctx.reply('Uso: /personalidade_set <trait> <valor>');
+      return;
+    }
+
+    await this.deps.personality.set(trait, value);
+    await ctx.reply(`Trait "<b>${trait}</b>" atualizado.`, { parse_mode: 'HTML' });
   }
 
   private async handleApprovalCommand(ctx: Context): Promise<void> {

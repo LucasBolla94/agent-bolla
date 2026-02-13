@@ -5,10 +5,15 @@ import { ConversationsRepository } from '../database/repositories/conversations.
 import { UsersRepository } from '../database/repositories/users.js';
 import { MemoryService } from '../memory/service.js';
 import { RagService } from '../memory/rag.js';
+import { PersonalityService } from '../personality/service.js';
 import { TelegramGrammYChannel } from './telegram.js';
 import { WhatsAppBaileysChannel } from './whatsapp.js';
 
-export const createWhatsAppChannel = (rag: RagService, memory: MemoryService): WhatsAppBaileysChannel => {
+export const createWhatsAppChannel = (
+  rag: RagService,
+  memory: MemoryService,
+  personality: PersonalityService
+): WhatsAppBaileysChannel => {
   const usersRepo = new UsersRepository();
   const conversationsRepo = new ConversationsRepository();
 
@@ -21,6 +26,7 @@ export const createWhatsAppChannel = (rag: RagService, memory: MemoryService): W
     {
       rag,
       memory,
+      personality,
       usersRepo,
       conversationsRepo,
       permissions
@@ -28,7 +34,11 @@ export const createWhatsAppChannel = (rag: RagService, memory: MemoryService): W
   );
 };
 
-export const createTelegramChannel = (rag: RagService, memory: MemoryService): TelegramGrammYChannel => {
+export const createTelegramChannel = (
+  rag: RagService,
+  memory: MemoryService,
+  personality: PersonalityService
+): TelegramGrammYChannel => {
   const usersRepo = new UsersRepository();
   const conversationsRepo = new ConversationsRepository();
   const codeImprovementsRepo = new CodeImprovementsRepository();
@@ -42,6 +52,7 @@ export const createTelegramChannel = (rag: RagService, memory: MemoryService): T
     {
       rag,
       memory,
+      personality,
       usersRepo,
       conversationsRepo,
       permissions,

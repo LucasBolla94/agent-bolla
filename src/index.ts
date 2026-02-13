@@ -59,12 +59,12 @@ async function main(): Promise<void> {
     console.log('RAG service ready (keywords + memory retrieval + short-term context).');
 
     // WhatsApp channel (phase 3.1)
-    const whatsapp = createWhatsAppChannel(rag, memory);
+    const whatsapp = createWhatsAppChannel(rag, memory, personality);
     await whatsapp.start();
     console.log(`WhatsApp channel initialized (enabled=${env.WHATSAPP_ENABLED}).`);
 
     // Telegram channel (phase 3.2)
-    const telegram = createTelegramChannel(rag, memory);
+    const telegram = createTelegramChannel(rag, memory, personality);
     await telegram.start();
     console.log(`Telegram channel initialized (enabled=${env.TELEGRAM_ENABLED}).`);
 

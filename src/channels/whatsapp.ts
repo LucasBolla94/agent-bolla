@@ -9,6 +9,7 @@ import makeWASocket, {
 import qrcode from 'qrcode-terminal';
 import { RagService } from '../memory/rag.js';
 import { MemoryService } from '../memory/service.js';
+import { PersonalityService } from '../personality/service.js';
 import { ConversationsRepository, ConversationMessage } from '../database/repositories/conversations.js';
 import { UserRecord, UsersRepository } from '../database/repositories/users.js';
 import { PermissionService } from '../core/permissions.js';
@@ -22,6 +23,7 @@ export interface WhatsAppChannelConfig {
 export interface WhatsAppChannelDeps {
   rag: RagService;
   memory: MemoryService;
+  personality: PersonalityService;
   usersRepo: UsersRepository;
   conversationsRepo: ConversationsRepository;
   permissions: PermissionService;
@@ -183,24 +185,65 @@ export class WhatsAppBaileysChannel implements WhatsAppChannel {
   }
 
   private async handleCommand(commandText: string, user: UserRecord): Promise<string> {
-    const command = commandText.trim().toLowerCase();
+    const parts = commandText.trim().split(/\s+/);
+    const cmd = parts[0].toLowerCase();
 
-    if (command === '!status') {
-      return 'Agent online. WhatsApp conectado e pipeline RAG ativo.';
+    if (cmd === '!status') {
+      const memCount = await this.deps.memory.count();
+      const nome = this.deps.personality.get('nome');
+      const humor = this.deps.personality.get('humor_atual');
+      return `${nome} online.\nHumor: ${humor}\nMemórias: ${memCount}\nPipeline RAG ativo.`;
     }
 
-    if (command === '!ping') {
-      return 'pong';
-    }
+    if (cmd === '!ping') return 'pong';
 
-    if (command === '!help') {
+    if (cmd === '!help') {
       if (user.role === 'owner') {
-        return 'Comandos owner: !status, !ping, !help';
+        return (
+          'Comandos owner:\n' +
+          '!status — estado atual\n' +
+          '!ping — latência\n' +
+          '!aprender <fato> — ensinar algo novo\n' +
+          '!personalidade ver — ver traits atuais\n' +
+          '!personalidade set <trait> <valor> — editar trait'
+        );
       }
-      return 'Comandos disponíveis: !status, !ping, !help';
+      return 'Comandos: !status, !ping, !help';
     }
 
-    return 'Comando sensível ou não reconhecido. Use !help';
+    // Owner-only commands
+    if (user.role !== 'owner') {
+      return 'Sem permissão para este comando.';
+    }
+
+    if (cmd === '!aprender') {
+      const fact = parts.slice(1).join(' ').trim();
+      if (!fact) return 'Uso: !aprender <fato>';
+      await this.deps.memory.saveRaw(fact, 'whatsapp', 'learned_fact');
+      return `Aprendi e memorizei: "${fact}"`;
+    }
+
+    if (cmd === '!personalidade') {
+      const sub = parts[1]?.toLowerCase();
+
+      if (sub === 'ver') {
+        const all = this.deps.personality.getAll();
+        return Object.entries(all)
+          .map(([k, v]) => `*${k}*: ${v.slice(0, 100)}`)
+          .join('\n');
+      }
+
+      if (sub === 'set' && parts[2] && parts.length > 3) {
+        const trait = parts[2].toLowerCase();
+        const value = parts.slice(3).join(' ');
+        await this.deps.personality.set(trait, value);
+        return `Trait "${trait}" atualizado para: "${value}"`;
+      }
+
+      return 'Uso: !personalidade ver | !personalidade set <trait> <valor>';
+    }
+
+    return 'Comando não reconhecido. Use !help';
   }
 
   private async replyAndPersist(input: {

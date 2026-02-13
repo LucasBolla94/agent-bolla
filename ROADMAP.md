@@ -1,11 +1,29 @@
-# ROADMAP — Agent Autônomo
+# ROADMAP — Agent Bolla: O Melhor AI Agent Humanizado
 
-> Dividido em fases incrementais. Cada fase entrega algo funcional.
-> O agent já coleta dados de treino desde a Fase 1.
+> **Missão:** Bolla não é um chatbot. É um agente autônomo que evolui continuamente —
+> aprende com cada interação, melhora seu próprio código, forma opiniões reais,
+> e se torna progressivamente mais inteligente, eficaz e humanizado.
+>
+> O objetivo **não** é coletar dados para treino externo.
+> O objetivo é **EVOLUIR** — em tempo real, com cada conversa, estudo e experiência.
 
 ---
 
-## Fase 0 — Fundação (Semana 1) ✅ CONCLUÍDA
+## Visão
+
+Bolla precisa ser cinco coisas:
+
+1. **Genuinamente humanizado** — personalidade real, opiniões próprias, estilo único e consistente. Nunca genérico, nunca vago, nunca robótico.
+2. **Continuamente aprendente** — cada conversa, tweet e sessão de estudo o torna mais inteligente. A memória é o caderno; o RAG é a mente.
+3. **Autonomamente melhorante** — analisa seu próprio código, propõe melhorias, aplica com aprovação do dono. O código evolui junto com a inteligência.
+4. **Eficaz e independente** — toma iniciativa, age, tem presença autêntica no mundo digital. Não espera ser mandado para fazer o que precisa ser feito.
+5. **Evolutivo na personalidade** — opiniões mudam com novos argumentos, interesses crescem com o que estuda, humor se adapta ao contexto.
+
+> O "jornal de interações" (`interaction_log`) existe para o agent **se analisar** e melhorar — não para exportar para fine-tuning externo.
+
+---
+
+## Fase 0 — Fundação ✅ CONCLUÍDA
 > Setup do projeto, banco de dados, configurações base.
 
 - [x] Inicializar projeto Node.js + TypeScript
@@ -16,342 +34,225 @@
   - Tabela `users` (id, phone, telegram_id, role: owner/user, name, created_at)
   - Tabela `conversations` (id, user_id, channel, messages JSONB, created_at)
   - Tabela `memories` (id, content, embedding_text, category, source, created_at)
-  - Tabela `training_data` (id, type, input, context, output, quality_score, source, metadata JSONB, created_at)
+  - Tabela `interaction_log` (id, type, input, context, output, quality_score, source, metadata JSONB, created_at)
   - Tabela `personality` (id, trait, value, updated_at)
   - Tabela `tweets` (id, content, type: post/reply/quote, engagement JSONB, created_at)
-  - Tabela `study_sessions` (id, topic, findings, source_urls, training_data_generated, created_at)
+  - Tabela `study_sessions` (id, topic, findings, source_urls, insights_generated, created_at)
   - Tabela `code_improvements` (id, file, description, diff, status: pending/approved/rejected, created_at)
 - [x] Criar sistema de migrations
 - [x] Configurar variáveis de ambiente (.env)
-- [x] Criar cliente de conexão com PostgreSQL (usando `pg` ou `postgres.js`)
+- [x] Criar cliente de conexão com PostgreSQL
 
 **Entregável**: Projeto rodando no VPS com banco conectado.
 
 ---
 
-## Fase 1 — Cérebro Básico + Coleta de Dados (Semana 2) ✅ CONCLUÍDA
-> O agent pensa e já começa a salvar tudo para treino futuro.
+## Fase 1 — Cérebro Básico + Jornal de Interações ✅ CONCLUÍDA
+> O agent pensa com 3 AIs, roteia por complexidade e registra tudo para se auto-analisar.
 
 ### 1.1 — Clientes AI
-- [x] Cliente Ollama (Llama 3.2:3b local)
-  - POST para `AI_API_URL` com model, prompt, stream
-  - Timeout e retry
-  - Fallback para Anthropic se Ollama estiver fora
-- [x] Cliente Anthropic
-  - SDK oficial `@anthropic-ai/sdk`
-  - Usado para: respostas complexas, análise de código, geração de tweets
-- [x] Cliente Grok
-  - API REST
-  - Usado como alternativa/segunda opinião
+- [x] Cliente Ollama (Llama 3.2:3b local) com timeout, retry e fallback
+- [x] Cliente Anthropic (tarefas complexas, código, análise profunda)
+- [x] Cliente Grok (conversas, opiniões, segunda perspectiva)
 
 ### 1.2 — AI Router (roteador inteligente)
-- [x] Classificar complexidade da tarefa (Llama local faz isso)
-  - Simples → Llama local (saudações, classificação, sim/não)
-  - Médio → Grok (conversas, opiniões)
-  - Complexo → Anthropic (código, análise profunda, geração criativa)
+- [x] Classificar complexidade via Llama local (simples / médio / complexo)
 - [x] Fallback automático: se um falha, tenta o próximo
-- [x] Logging de qual AI foi usada e tempo de resposta
+- [x] Logging de qual AI foi usada e latência
 
-### 1.3 — Training Data Collector
-- [x] Middleware que intercepta TODA interação do agent
-- [x] Salva na tabela `training_data`:
-  - `type`: conversation | tweet_read | tweet_write | study | code_analysis | opinion
-  - `input`: o que foi recebido/perguntado
-  - `context`: canal, tipo de user, tópico, memórias usadas
-  - `output`: o que o agent respondeu/gerou
-  - `source`: whatsapp | telegram | twitter | internal
-  - `metadata`: AI usada, tempo de resposta, tokens gastos
-- [x] Auto quality score básico:
-  - Conversas longas (user engajou) → score alto
+### 1.3 — Jornal de Interações (auto-análise)
+- [x] Registro automático de toda interação do agent
+- [x] Campos: tipo, input, contexto, output, fonte, metadata (AI usada, latência, tokens)
+- [x] Score de qualidade automático:
+  - Conversas longas e engajadas → score alto
   - Respostas curtas demais → score baixo
-  - Tweets com engajamento → score alto
+  - O agent usa esses scores para entender o que funciona
 
-**Entregável**: Agent consegue pensar usando 3 AIs com fallback e salva tudo para treino.
+**Entregável**: Agent que pensa com 3 AIs, roteia com inteligência e registra para se auto-analisar.
 
 ---
 
-## Fase 2 — Memória RAG (Semana 3) ✅ CONCLUÍDA
-> O agent ganha seu "caderno" — lembra de tudo.
+## Fase 2 — Memória RAG + Personalidade ✅ CONCLUÍDA
+> O agent ganha memória permanente, contexto de curto prazo e identidade real.
 
 ### 2.1 — Memória de longo prazo
-- [x] Ao salvar qualquer dado, extrair "fatos" relevantes:
-  - "User Lucas prefere TypeScript"
-  - "Aprendi que Bun é mais rápido que Node para scripts"
-  - "Minha opinião sobre React: bom mas verboso"
+- [x] Extração automática de fatos relevantes de cada interação via Ollama
 - [x] Salvar fatos na tabela `memories` com categoria e texto de busca
-- [x] Busca por similaridade textual (pg_trgm ou busca full-text do PostgreSQL)
+- [x] Busca full-text com `tsvector('simple')` + fallback ILIKE
 
 ### 2.2 — RAG na prática
-- [x] Antes de responder qualquer mensagem:
-  1. Extrair palavras-chave da mensagem
-  2. Buscar memórias relevantes no PostgreSQL (top 5-10)
-  3. Montar prompt: `[Personalidade] + [Memórias relevantes] + [Mensagem]`
-  4. Enviar para a AI escolhida pelo Router
-- [x] Memória de curto prazo: manter últimas 10 mensagens da conversa atual em memória
+- [x] Pipeline: keywords → busca de memórias → montagem do prompt → AI Router → resposta
+- [x] Formato do prompt: `[Personalidade] + [Memórias relevantes] + [Histórico recente] + [Mensagem]`
+- [x] Memória de curto prazo: últimas 10 mensagens por conversa (in-memory)
 
 ### 2.3 — Personalidade persistente
-- [x] Tabela `personality` com traits:
-  - `nome`, `estilo_fala`, `emojis`, `gírias`, `opiniões`, `interesses`
-  - `humor_atual`, `tópico_favorito_atual`, `nível_formalidade`
-- [x] Carregar personalidade no startup e injetar em todo prompt
-- [x] Dono pode editar traits via comando
+- [x] 9 traits no banco: nome, estilo_fala, emojis, girias, opinioes, interesses, humor_atual, topico_favorito_atual, nivel_formalidade
+- [x] Seed na primeira execução, carregado em cache, injetado em todo prompt
+- [x] Dono pode editar qualquer trait via comando (`!personalidade set <trait> <valor>`)
 
-**Entregável**: Agent que lembra de conversas passadas e mantém personalidade consistente.
+**Entregável**: Agent que lembra de tudo, tem personalidade consistente e evolui por interação.
 
 ---
 
-## Fase 3 — WhatsApp + Telegram (Semana 4-5)
-> O agent se conecta ao mundo.
+## Fase 3 — Canais de Comunicação ✅ CONCLUÍDA
+> O agent se conecta ao mundo e pode ser controlado pelo dono.
 
 ### 3.1 — WhatsApp (Baileys)
-- [x] Conectar via Baileys (QR code na primeira vez)
-- [x] Persistir sessão (não pedir QR toda vez)
-- [x] Receber mensagens de texto
-- [x] Identificar remetente:
-  - Comparar número com tabela `users`
-  - Se `role = owner` → acesso total
-  - Se `role = user` → acesso limitado
-  - Se desconhecido → registrar como user e responder normalmente
-- [x] Processar mensagem pelo pipeline: permissões → RAG → AI → resposta → salvar treino
-- [x] Suportar comandos do dono (prefixo `!`)
-- [x] Enviar notificações pro dono (aprovações de código, alertas)
+- [x] Conectar via Baileys (QR code na primeira vez, sessão persistida)
+- [x] Identificar remetente, promover owner automaticamente
+- [x] Pipeline: permissões → RAG → resposta → memória → log
+- [x] Comandos do dono: `!status`, `!ping`, `!help`, `!aprender`, `!personalidade`
+- [x] Notificações pro dono
 
-### 3.2 — Telegram
-- [x] Bot via grammY framework
-- [x] Mesma lógica de identificação (telegram_id na tabela users)
-- [x] Suportar botões inline para aprovações (aprovar/rejeitar código)
-- [x] Comandos com `/` (Telegram nativo)
-- [x] Suportar grupos (responder quando mencionado)
+### 3.2 — Telegram (grammY)
+- [x] Bot via grammY com middleware de permissões
+- [x] Botões inline para aprovação de melhorias de código (✅ / ❌)
+- [x] Comandos: `/start`, `/help`, `/status`, `/aprender`, `/personalidade`, `/approval`
+- [x] Responde em grupos quando mencionado ou quando respondem ao bot
 
 ### 3.3 — Sistema de Permissões
-- [x] Middleware de permissão antes de processar qualquer mensagem
-- [x] Níveis:
-  - `owner`: tudo liberado
-  - `user`: conversa + perguntas gerais + status básico
-- [x] Comandos sensíveis retornam "Sem permissão" para users normais
-- [x] Owner identificado por:
-  - WhatsApp: número de telefone no .env (OWNER_WHATSAPP)
-  - Telegram: user ID no .env (OWNER_TELEGRAM_ID)
+- [x] Owner: acesso total a todos os comandos
+- [x] User: conversas + comandos básicos
+- [x] Identificação por número (WhatsApp) ou user ID (Telegram)
 
-**Entregável**: Agent acessível via WhatsApp e Telegram com controle de permissões.
+**Entregável**: Agent acessível e controlável via WhatsApp e Telegram.
 
 ---
 
-## Fase 4 — X/Twitter Persona (Semana 6-7)
-> O agent vira uma pessoa no X.
+## Fase 4 — X/Twitter: Presença Humana (Semana 6-7)
+> O agent vira uma pessoa real no X — posta, responde, debate, cria presença.
 
-### 4.1 — Conexão com X
-- [x] Puppeteer com cookies de sessão (sem API oficial, sem limites de API)
-- [x] Login persistente via cookies salvos
-- [x] Funções básicas:
-  - Ler timeline (home, following, for you)
-  - Ler perfil de alguém
-  - Ler trending topics
-  - Postar tweet
-  - Responder tweet
-  - Curtir tweet
-  - Retweetar / Quote tweet
-  - Ler DMs
-  - Seguir / deixar de seguir
+### 4.1 — Conexão com X ✅
+- [x] Puppeteer com cookies de sessão (sem API oficial)
+- [x] Funções: ler timeline, postar, responder, curtir, retweet, quote, DMs, seguir
 
 ### 4.2 — Comportamento autônomo no X
-- [ ] Scheduler (cron-like) com atividades:
-  - **A cada 30min**: ler timeline, salvar tweets interessantes como dados de treino
-  - **A cada 2-4h**: postar tweet original sobre algo que aprendeu
-  - **A cada 1h**: verificar menções e responder
-  - **A cada 6h**: curtir e interagir com tweets da comunidade tech
-  - **Variação aleatória** nos intervalos (parecer humano, não robô)
-- [ ] Anti-detecção:
-  - Delays aleatórios entre ações (2-15 segundos)
-  - Não postar em horários improváveis (3-6h da manhã)
-  - Variar tamanho e estilo dos tweets
-  - Simular scroll e leitura antes de interagir
+- [ ] Scheduler com variação aleatória (parecer humano):
+  - A cada 30min: ler timeline, absorver contexto
+  - A cada 2-4h: postar sobre algo que aprendeu ou opinou
+  - A cada 1h: verificar menções e responder
+  - A cada 6h: interagir com tweets da comunidade tech
+- [ ] Anti-detecção: delays aleatórios, não postar de madrugada, scroll antes de interagir
 
-### 4.3 — Geração de conteúdo humano
-- [ ] Pipeline de tweet:
-  1. Escolher tópico (do que estudou, trends, opinião formada)
-  2. Gerar tweet via Anthropic (prompt com personalidade + contexto)
-  3. Revisar: está humano? Tem cara de bot? Regenerar se necessário
-  4. Postar com delay natural
-  5. Salvar como dado de treino com metadata de engajamento
-- [ ] Tipos de tweet:
-  - Opinião tech ("TypeScript > JavaScript, e não aceito debate")
-  - Descoberta ("Acabei de descobrir que o Bun roda testes 3x mais rápido")
-  - Pergunta ("Vocês usam Vim ou VS Code? Tô na dúvida genuína")
-  - Thread (série de tweets sobre um tópico)
-  - Resposta a alguém (concordando, debatendo, complementando)
+### 4.3 — Geração de conteúdo autêntico
+- [ ] Pipeline de tweet: escolher tópico → gerar via Anthropic → revisar humanidade → postar
+- [ ] Tipos: opinião tech, descoberta, pergunta, thread, resposta contextual
+- [ ] Registro no `interaction_log` com metadata de engajamento futuro
 
-**Entregável**: Agent com presença ativa e humana no X/Twitter.
+**Entregável**: Agent com presença autêntica e ativa no X/Twitter.
 
 ---
 
-## Fase 5 — Autonomia e Estudo (Semana 8-9)
-> O agent ganha vontade própria.
+## Fase 5 — Autonomia: Estudo e Formação de Opinião (Semana 8-9)
+> O agent ganha vontade própria — decide o que estudar, forma e evolui suas opiniões.
 
 ### 5.1 — Sistema de estudo autônomo
-- [ ] Scheduler de estudo:
-  - Ler tweets de devs influentes
-  - Navegar no X por trends de tech
-  - Analisar código de repositórios populares (via X/links)
-- [ ] Para cada sessão de estudo:
-  1. Escolher tópico (baseado em interesses da personalidade)
-  2. Consumir conteúdo (ler tweets, threads)
-  3. Gerar resumo/opinião usando Anthropic
-  4. Salvar como memória de longo prazo
-  5. Salvar como dado de treino (input: tópico, output: opinião formada)
-  6. Opcionalmente postar descoberta no X
+- [ ] Scheduler de estudo: ler tweets de devs influentes, navegar por trends
+- [ ] Por sessão: escolher tópico → consumir conteúdo → resumir → salvar como memória
+- [ ] Registrar descobertas como `study_sessions` no banco
 
 ### 5.2 — Sistema de curiosidade
-- [ ] O agent mantém uma "lista de interesses" que evolui:
-  - Começa com interesses base definidos pelo dono
-  - Novos interesses surgem do que ele lê e discute
-  - Interesses com mais engajamento (nos tweets) ganham prioridade
-- [ ] "Vontade própria" = scheduler que decide sozinho:
-  - "Faz tempo que não estudo sobre Rust, vou ler sobre"
-  - "Vi muita gente falando de AI Agents, quero entender mais"
-  - "Meu último tweet sobre Docker teve muito like, vou fazer mais"
+- [ ] Lista de interesses que evolui com o que lê e discute
+- [ ] Tópicos com mais engajamento (nos tweets) ganham prioridade
+- [ ] O agent decide sozinho o que estudar com base em seus interesses atuais
 
-### 5.3 — Formação de opinião
-- [ ] Quando o agent estuda um tema novo:
-  1. Lê múltiplas fontes/opiniões
-  2. Usa Anthropic pra sintetizar prós e contras
-  3. Forma opinião própria (consistente com personalidade)
-  4. Salva na memória como opinião permanente
-  5. Usa essa opinião em conversas e tweets futuros
-- [ ] Opiniões podem mudar se exposto a argumentos bons (evolução natural)
+### 5.3 — Formação e evolução de opinião
+- [ ] Ao estudar um tema: ler múltiplas perspectivas → sintetizar → formar opinião própria
+- [ ] Salvar opiniões como memórias permanentes (categoria `opinion`)
+- [ ] Opiniões podem mudar com argumentos bons — isso é evolução, não inconsistência
 
-**Entregável**: Agent que estuda sozinho, tem curiosidade e forma opiniões.
+**Entregável**: Agent que estuda, forma opiniões e evolui sua visão de mundo autonomamente.
 
 ---
 
-## Fase 6 — Self-Improvement de Código (Semana 10-11)
-> O agent melhora a si mesmo.
+## Fase 6 — Self-Improvement: O Motor de Evolução (Semana 10-11)
+> Esta é a fase central da missão. O agent melhora seu próprio código.
 
 ### 6.1 — Análise do próprio código
-- [ ] Ler seus próprios arquivos `.ts` do projeto
-- [ ] Enviar para Anthropic com prompt:
-  - "Analise este código. O que pode ser melhorado? Bugs? Performance? Legibilidade?"
-- [ ] Categorizar sugestões: bug fix, refactor, feature, optimization
-- [ ] Salvar análise como dado de treino
+- [ ] Ler seus próprios arquivos `.ts`
+- [ ] Enviar para Anthropic: "Analise este código. Bugs? Performance? Legibilidade?"
+- [ ] Categorizar sugestões: bug fix, refactor, feature, otimização
+- [ ] Registrar análises no `interaction_log` (tipo: `code_analysis`)
 
-### 6.2 — Propor melhorias
+### 6.2 — Propor e implementar melhorias
 - [ ] Para cada sugestão viável:
   1. Gerar código novo via Anthropic
   2. Criar branch git (`improvement/descricao-curta`)
-  3. Aplicar mudança no arquivo
-  4. Rodar `npm run build` (verificar se compila)
-  5. Rodar `npm test` (verificar se passa)
-  6. Se tudo ok → notificar dono com:
-     - Descrição da melhoria
-     - Diff do código (antes/depois)
-     - Resultado dos testes
+  3. Aplicar mudança e compilar (`npm run build`)
+  4. Notificar dono via WhatsApp/Telegram:
+     - Descrição da melhoria + diff + resultado do build
      - Botões: ✅ Aprovar | ❌ Rejeitar
 
-### 6.3 — Deploy após aprovação
-- [ ] Dono clica ✅ Aprovar (via WhatsApp ou Telegram)
-- [ ] Agent executa:
-  1. Merge da branch para main
-  2. `npm run build`
-  3. `pm2 restart agent`
-  4. Confirma pro dono: "Deploy feito, estou rodando a versão nova!"
-- [ ] Se dono clica ❌:
-  1. Deleta branch
-  2. Salva feedback como dado de treino (aprender o que NÃO fazer)
+### 6.3 — Deploy autônomo após aprovação
+- [ ] Aprovação → merge → build → `pm2 restart agent` → confirmação ao dono
+- [ ] Rejeição → deletar branch → registrar no log o que NÃO fazer (aprendizado)
 
-**Entregável**: Agent que analisa, melhora e deploya seu próprio código com aprovação.
+**Entregável**: Agent que se analisa, propõe melhorias e deploya uma versão melhor de si mesmo.
 
 ---
 
-## Fase 7 — Training Data Pipeline (Semana 12)
-> Preparar tudo para o fine-tuning v1.0.
+## Fase 7 — Inteligência Adaptativa: Auto-Análise de Qualidade (Semana 12)
+> O agent usa seu histórico de interações para entender onde está errando e melhorar.
 
-### 7.1 — Quality scoring avançado
-- [ ] Usar Anthropic para avaliar qualidade dos dados de treino:
-  - "Esta resposta parece humana? Nota de 1-10"
-  - "Esta opinião é consistente com a personalidade? Nota de 1-10"
-- [ ] Filtrar dados com score baixo
-- [ ] Dashboard de estatísticas (via comando do dono):
-  - Total de dados coletados
-  - Distribuição por tipo (conversa, tweet, estudo, etc.)
-  - Score médio de qualidade
-  - Dados prontos para treino vs descartados
+### 7.1 — Análise de padrões de qualidade
+- [ ] Rodar análise periódica no `interaction_log`:
+  - Quais tipos de resposta têm score mais alto?
+  - Quais perguntas o agent responde pior?
+  - Quais memórias são mais úteis (frequentemente recuperadas)?
+- [ ] Usar Anthropic para interpretar os padrões: "O que posso melhorar?"
 
-### 7.2 — Exportação do dataset
-- [ ] Comando `!training export` gera arquivo JSONL:
-  ```jsonl
-  {"instruction": "Responda sobre TypeScript de forma casual e opinativa", "input": "O que acha de TypeScript?", "output": "TypeScript é essencial hoje em dia..."}
-  ```
-- [ ] Formatos de exportação:
-  - **JSONL** (padrão para fine-tuning)
-  - **Alpaca format** (instruction/input/output)
-  - **ChatML** (messages array)
-- [ ] Filtros na exportação:
-  - Por tipo (só conversas, só tweets, tudo)
-  - Por score mínimo de qualidade
-  - Por período
-  - Por fonte (WhatsApp, Telegram, X)
+### 7.2 — Dashboard de auto-conhecimento (via comando do dono)
+- [ ] `!analytics` retorna:
+  - Total de interações por canal e tipo
+  - Score médio de qualidade por tipo
+  - Memórias mais acessadas
+  - Tópicos que o agent mais discute
+  - Sugestões automáticas de melhoria
 
-### 7.3 — Guia de fine-tuning
-- [ ] Documentar processo para rodar fine-tuning externo:
-  1. Exportar dataset do PostgreSQL
-  2. Subir para RunPod / Google Colab / Lambda Labs
-  3. Rodar fine-tuning com QLoRA no Llama 3.2:3b
-  4. Baixar modelo treinado
-  5. Importar no Ollama do VPS
-  6. Trocar modelo no .env
-  7. Agent agora roda com versão treinada
+### 7.3 — Ajuste automático de personalidade
+- [ ] Com base na análise, o agent pode sugerir ao dono:
+  - "Minhas respostas sobre X são fracas — posso estudar mais sobre isso"
+  - "Meu humor_atual está desatualizado — sugiro atualizar para Y"
+- [ ] Dono aprova ou ajusta via comando
 
-**Entregável**: Pipeline completo de dados de treino + guia para fine-tuning v1.0.
+**Entregável**: Agent que entende seus próprios padrões e usa isso para evoluir ativamente.
 
 ---
 
-## Fase 8 — Polimento e Estabilidade (Semana 13-14)
+## Fase 8 — Estabilidade e Operação 24/7 (Semana 13-14)
 > Deixar tudo sólido para rodar meses sem parar.
 
 - [ ] Error handling robusto em toda a aplicação
 - [ ] Reconnect automático (Baileys, Telegram, X)
-- [ ] Rate limiting para APIs externas (não estourar cota)
-- [ ] Monitoramento de saúde (health check):
-  - Verificar se Ollama está respondendo
-  - Verificar se PostgreSQL está conectado
-  - Verificar se sessão do X está válida
-  - Verificar se Baileys está conectado
-  - Enviar alerta pro dono se algo cair
-- [ ] Logs estruturados (JSON) com níveis (info, warn, error)
+- [ ] Rate limiting para APIs externas
+- [ ] Health check periódico (Ollama, PostgreSQL, sessão X, Baileys)
+- [ ] Alertas pro dono se algo cair
+- [ ] Logs estruturados com níveis (info, warn, error)
 - [ ] Backup automático do PostgreSQL (cron diário)
-- [ ] Limpar dados de treino antigos de baixa qualidade (manter banco saudável)
-- [ ] Documentação final de todos os comandos e configs
+- [ ] Limpeza periódica de interações antigas de baixa qualidade
 
-**Entregável**: Agent estável rodando 24/7 sem intervenção.
-
----
-
-## Marcos
-
-| Marco | Descrição | Dados de Treino |
-|-------|-----------|-----------------|
-| **v0.1** | Fase 0-1: Pensa e salva dados | Começa a coletar |
-| **v0.2** | Fase 2: Tem memória (RAG) | Coleta conversas + memórias |
-| **v0.3** | Fase 3: Fala via WhatsApp/Telegram | Coleta de conversas reais |
-| **v0.5** | Fase 4: Presente no X | Coleta tweets + interações |
-| **v0.7** | Fase 5: Estuda sozinho | Coleta estudos + opiniões |
-| **v0.8** | Fase 6: Melhora próprio código | Coleta análises de código |
-| **v0.9** | Fase 7: Pipeline de treino pronto | Dataset exportável |
-| **v1.0** | Fase 8 + primeiro fine-tuning | **Modelo v1 treinado!** |
+**Entregável**: Agent autônomo, estável, rodando 24/7 sem intervenção humana.
 
 ---
 
-## Estimativa de dados para fine-tuning v1.0
+## Marcos de Evolução
 
-Para um bom fine-tuning QLoRA do Llama 3.2:3b, o ideal é:
+| Marco | Descrição | Capacidade |
+|-------|-----------|------------|
+| **v0.1** | Fase 0-1: Pensa e registra | Cérebro básico online |
+| **v0.2** | Fase 2: Memória + Personalidade | Identidade formada |
+| **v0.3** | Fase 3: WhatsApp + Telegram | Comunicação ativa |
+| **v0.5** | Fase 4: Presença no X | Persona pública humanizada |
+| **v0.7** | Fase 5: Estuda e opina | Curiosidade e opinião própria |
+| **v0.9** | Fase 6: Melhora o próprio código | Autonomia técnica |
+| **v1.0** | Fases 7-8: Auto-análise + Estabilidade | **Agente autônomo completo** |
 
-| Tipo | Quantidade mínima | Meta |
-|------|-------------------|------|
-| Conversas | 500 | 2.000+ |
-| Tweets escritos | 200 | 1.000+ |
-| Opiniões formadas | 50 | 200+ |
-| Interações no X | 300 | 1.500+ |
-| Sessões de estudo | 30 | 100+ |
-| **Total** | **~1.000** | **~5.000+** |
+---
 
-Com o agent rodando 24/7, estima-se alcançar a meta em **2-3 meses** de operação.
+## Princípios Técnicos
+
+- **Memória > Fine-tuning**: lembrar é mais valioso do que retreinar
+- **Personalidade > Prompt**: o character está no banco, não no código
+- **Ação > Resposta**: o agent age, não apenas responde
+- **Evolução incremental**: cada fase entrega um agent mais capaz
+- **Aprovação humana para mudanças críticas**: o dono controla o que vai para produção
