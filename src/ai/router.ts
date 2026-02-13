@@ -1,3 +1,4 @@
+import { env } from '../config/env.js';
 import { AiClients } from './index.js';
 import { AiProvider, RouterInput, RouterOutput, TaskComplexity } from './types.js';
 
@@ -15,15 +16,25 @@ Task: "${userPrompt.slice(0, 500)}"
 Respond with only one word (simple, medium, or complex):`;
 
 /**
- * Provider priority chain per complexity level.
- * simple  → Ollama (fast, local)  → Grok → Anthropic
- * medium  → Grok (conversational) → Ollama → Anthropic
- * complex → Anthropic (powerful)  → Grok  → Ollama
+ * Llama-first provider chains (v1.2).
+ * Ollama é o cérebro principal — APIs pagas só entram quando Ollama falha.
+ *
+ * simple  → Ollama (sempre local, nunca escala para APIs pagas)
+ * medium  → Ollama → Grok → Anthropic
+ * complex → Ollama → Anthropic → Grok
+ *
+ * FORCE_LOCAL=true: apenas Ollama em todos os níveis.
  */
 const PROVIDER_CHAIN: Record<TaskComplexity, AiProvider[]> = {
-  simple:  ['ollama', 'grok', 'anthropic'],
-  medium:  ['grok',   'ollama', 'anthropic'],
-  complex: ['anthropic', 'grok', 'ollama'],
+  simple:  ['ollama'],
+  medium:  ['ollama', 'grok', 'anthropic'],
+  complex: ['ollama', 'anthropic', 'grok']
+};
+
+const PROVIDER_CHAIN_LOCAL_ONLY: Record<TaskComplexity, AiProvider[]> = {
+  simple:  ['ollama'],
+  medium:  ['ollama'],
+  complex: ['ollama']
 };
 
 export class AiRouter {
@@ -31,14 +42,14 @@ export class AiRouter {
 
   /**
    * Asks Ollama to classify the prompt complexity.
-   * Falls back to 'complex' if classification fails or is ambiguous.
+   * Falls back to 'medium' if classification fails (not 'complex' — avoids unnecessary API cost).
    */
   async classify(prompt: string): Promise<TaskComplexity> {
     try {
       const result = await this.clients.ollama.generateText({
         prompt: buildClassifyPrompt(prompt),
         systemPrompt: CLASSIFY_SYSTEM_PROMPT,
-        temperature: 0,
+        temperature: 0
       });
 
       const word = result.text.toLowerCase().trim().split(/\s+/)[0];
@@ -50,22 +61,23 @@ export class AiRouter {
       console.warn('[AiRouter] Unexpected classification response:', result.text);
     } catch (error) {
       console.warn(
-        '[AiRouter] Classification failed, defaulting to complex:',
+        '[AiRouter] Classification failed, defaulting to medium:',
         error instanceof Error ? error.message : error
       );
     }
 
-    return 'complex';
+    return 'medium';
   }
 
   /**
    * Routes the input to the best available AI provider based on task complexity.
-   * Automatically falls back to the next provider in the chain if one fails.
-   * Logs which provider was used, latency, and whether a fallback occurred.
+   * Llama-first: sempre tenta Ollama primeiro. APIs pagas só usadas quando Ollama falha.
+   * FORCE_LOCAL=true: bloqueia qualquer provider pago.
    */
   async route(input: RouterInput): Promise<RouterOutput> {
     const complexity = input.complexity ?? (await this.classify(input.prompt));
-    const chain = PROVIDER_CHAIN[complexity];
+    const forceLocal = env.FORCE_LOCAL === 'true';
+    const chain = forceLocal ? PROVIDER_CHAIN_LOCAL_ONLY[complexity] : PROVIDER_CHAIN[complexity];
 
     let firstAttempt = true;
     let fallbackUsed = false;
@@ -81,7 +93,7 @@ export class AiRouter {
 
       if (!firstAttempt) {
         fallbackUsed = true;
-        console.warn(`[AiRouter] Falling back to ${provider} (complexity: ${complexity})`);
+        console.warn(`[AiRouter] Ollama failed, falling back to ${provider} (complexity: ${complexity})`);
       }
 
       firstAttempt = false;
@@ -90,7 +102,7 @@ export class AiRouter {
         const result = await client.generateText(input);
 
         console.info(
-          `[AiRouter] provider=${result.provider} complexity=${complexity} latency=${result.latencyMs}ms fallback=${fallbackUsed}`
+          `[AiRouter] provider=${result.provider} complexity=${complexity} latency=${result.latencyMs}ms fallback=${fallbackUsed} forceLocal=${forceLocal}`
         );
 
         return { ...result, complexity, fallbackUsed };

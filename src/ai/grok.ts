@@ -2,8 +2,10 @@ import { env } from '../config/env.js';
 import { AiClientError } from './errors.js';
 import { AiTextClient, GenerateTextInput, GenerateTextOutput } from './types.js';
 import { fetchWithTimeout, isRetryableStatus, withRetry } from './utils.js';
+import { RateLimiter } from '../ops/rate-limiter.js';
 
 const PROVIDER = 'grok';
+const limiter = new RateLimiter(PROVIDER, Number(env.GROK_MIN_INTERVAL_MS || '500'));
 
 interface GrokConfig {
   apiUrl: string;
@@ -55,7 +57,7 @@ export class GrokClient implements AiTextClient {
   public async generateText(input: GenerateTextInput): Promise<GenerateTextOutput> {
     const startedAt = Date.now();
 
-    const response = await withRetry(
+    const response = await limiter.run(async () => withRetry(
       async () => {
         const httpResponse = await fetchWithTimeout(
           this.config.apiUrl,
@@ -96,7 +98,7 @@ export class GrokClient implements AiTextClient {
       },
       { attempts: this.config.retryAttempts },
       (error) => error instanceof AiClientError && error.retryable
-    );
+    ));
 
     const text = response.choices[0]?.message?.content?.trim();
     if (!text) {

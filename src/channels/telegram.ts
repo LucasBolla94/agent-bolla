@@ -30,12 +30,17 @@ export interface TelegramChannelDeps {
 export interface TelegramChannel {
   start(): Promise<void>;
   notifyOwner(text: string): Promise<void>;
+  isConnected(): boolean;
+  reconnect(): Promise<void>;
 }
 
 export class TelegramGrammYChannel implements TelegramChannel {
   private readonly bot?: Bot<Context>;
   private botUsername = '';
   private botId = 0;
+  private connected = false;
+  private reconnectTimer?: NodeJS.Timeout;
+  private reconnectAttempts = 0;
 
   constructor(
     private readonly config: TelegramChannelConfig,
@@ -64,6 +69,8 @@ export class TelegramGrammYChannel implements TelegramChannel {
 
     this.bot.start({
       onStart: () => {
+        this.connected = true;
+        this.reconnectAttempts = 0;
         console.log(`[Telegram] Bot started as @${this.botUsername || me.first_name}`);
       }
     });
@@ -76,6 +83,17 @@ export class TelegramGrammYChannel implements TelegramChannel {
     if (!Number.isFinite(ownerId)) return;
 
     await this.bot.api.sendMessage(ownerId, text);
+  }
+
+  isConnected(): boolean {
+    return this.connected;
+  }
+
+  async reconnect(): Promise<void> {
+    if (!this.bot) return;
+    this.connected = false;
+    this.bot.stop();
+    await this.start();
   }
 
   private registerHandlers(bot: Bot<Context>): void {
@@ -169,7 +187,24 @@ export class TelegramGrammYChannel implements TelegramChannel {
 
     bot.catch((error) => {
       console.error('[Telegram] bot error:', error.error);
+      this.connected = false;
+      this.scheduleReconnect();
     });
+  }
+
+  private scheduleReconnect(): void {
+    if (this.reconnectTimer) return;
+
+    this.reconnectAttempts += 1;
+    const delayMs = Math.min(60000, 1500 * 2 ** Math.min(this.reconnectAttempts, 5));
+
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = undefined;
+      void this.reconnect().catch((error) => {
+        console.error('[Telegram] reconnect failed:', error);
+        this.scheduleReconnect();
+      });
+    }, delayMs);
   }
 
   private async handleStatusCommand(ctx: Context): Promise<void> {

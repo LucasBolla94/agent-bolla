@@ -16,7 +16,6 @@ export class Database {
 
     this.pool.on('error', (err) => {
       console.error('Unexpected error on idle client', err);
-      process.exit(-1);
     });
   }
 
@@ -31,7 +30,10 @@ export class Database {
     return this.pool;
   }
 
-  public async query<T extends pkg.QueryResultRow = any>(text: string, params?: any[]): Promise<pkg.QueryResult<T>> {
+  public async query<T extends pkg.QueryResultRow = pkg.QueryResultRow>(
+    text: string,
+    params?: unknown[]
+  ): Promise<pkg.QueryResult<T>> {
     const start = Date.now();
     try {
       const res = await this.pool.query<T>(text, params);

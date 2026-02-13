@@ -12,8 +12,17 @@ import { createSelfImprovementService } from './self-improvement/index.js';
 import { AnalyticsService, createAnalyticsScheduler } from './analytics/index.js';
 import { PersonalitySuggestionsRepository } from './database/repositories/personality-suggestions.js';
 import { collector } from './training/index.js';
+import {
+  createHealthDependencies,
+  createHealthMonitor,
+  createMaintenanceScheduler,
+  logger,
+  setupStructuredLogging,
+  withRetry
+} from './ops/index.js';
 
 async function main(): Promise<void> {
+  setupStructuredLogging();
   console.log('Agent Bolla - Starting...');
   console.log(`Environment: ${env.NODE_ENV}`);
   console.log(`Log Level: ${env.LOG_LEVEL}`);
@@ -78,12 +87,20 @@ async function main(): Promise<void> {
 
     // WhatsApp channel (phase 3.1)
     const whatsapp = createWhatsAppChannel(rag, memory, personality, selfImprovement, analyticsService);
-    await whatsapp.start();
+    await withRetry('whatsapp.start', async () => whatsapp.start(), {
+      attempts: 5,
+      baseDelayMs: 1000,
+      maxDelayMs: 30000
+    });
     console.log(`WhatsApp channel initialized (enabled=${env.WHATSAPP_ENABLED}).`);
 
     // Telegram channel (phase 3.2)
     const telegram = createTelegramChannel(rag, memory, personality, selfImprovement, analyticsService);
-    await telegram.start();
+    await withRetry('telegram.start', async () => telegram.start(), {
+      attempts: 5,
+      baseDelayMs: 1000,
+      maxDelayMs: 30000
+    });
     console.log(`Telegram channel initialized (enabled=${env.TELEGRAM_ENABLED}).`);
 
     selfImprovement.registerNotifier({
@@ -106,7 +123,11 @@ async function main(): Promise<void> {
 
     // Twitter platform (phase 4.1)
     const twitter = createTwitterPlatform();
-    await twitter.start();
+    await withRetry('twitter.start', async () => twitter.start(), {
+      attempts: 5,
+      baseDelayMs: 2000,
+      maxDelayMs: 60000
+    });
     console.log(`Twitter platform initialized (enabled=${env.TWITTER_ENABLED}).`);
 
     const twitterScheduler = createTwitterAutonomousScheduler({
@@ -138,8 +159,35 @@ async function main(): Promise<void> {
     studyScheduler.start();
     console.log(`Study autonomous scheduler initialized (enabled=${env.STUDY_AUTONOMOUS_ENABLED}).`);
 
+    const healthMonitor = createHealthMonitor(createHealthDependencies({
+      ollama: aiClients.ollama,
+      whatsappConnected: () => whatsapp.isConnected(),
+      telegramConnected: () => telegram.isConnected(),
+      twitterHealthy: async () => twitter.healthCheck()
+    }));
+    healthMonitor.registerNotifier({
+      name: 'whatsapp',
+      notify: async (text) => whatsapp.notifyOwner(text)
+    });
+    healthMonitor.registerNotifier({
+      name: 'telegram',
+      notify: async (text) => telegram.notifyOwner(text)
+    });
+    healthMonitor.start();
+
+    const maintenance = createMaintenanceScheduler(collector);
+    maintenance.registerNotifier({
+      name: 'whatsapp',
+      notify: async (text) => whatsapp.notifyOwner(text)
+    });
+    maintenance.registerNotifier({
+      name: 'telegram',
+      notify: async (text) => telegram.notifyOwner(text)
+    });
+    maintenance.start();
+
     console.log('Agent Bolla initialized successfully!');
-    console.log('Phases 1.1 / 1.2 / 1.3 / 2.1 / 2.2 / 2.3 / 3.1 / 3.2 / 3.3 / 4.1 / 4.2 / 4.3 / 5.1 / 5.2 / 5.3 / 6 / 7 complete.');
+    console.log('Phases 1.1 / 1.2 / 1.3 / 2.1 / 2.2 / 2.3 / 3.1 / 3.2 / 3.3 / 4.1 / 4.2 / 4.3 / 5.1 / 5.2 / 5.3 / 6 / 7 / 8 complete.');
 
     // Expose for use in subsequent phases
     void router;
@@ -156,11 +204,21 @@ async function main(): Promise<void> {
     void selfImprovement;
     void analyticsService;
     void analyticsScheduler;
+    void healthMonitor;
+    void maintenance;
 
   } catch (error) {
     console.error('Error initializing agent:', error);
     process.exit(1);
   }
 }
+
+process.on('unhandledRejection', (reason) => {
+  logger.error({ reason }, 'Unhandled rejection');
+});
+
+process.on('uncaughtException', (error) => {
+  logger.fatal({ error }, 'Uncaught exception');
+});
 
 main();

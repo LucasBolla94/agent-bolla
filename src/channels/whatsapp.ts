@@ -36,10 +36,15 @@ export interface WhatsAppChannelDeps {
 export interface WhatsAppChannel {
   start(): Promise<void>;
   notifyOwner(text: string): Promise<void>;
+  isConnected(): boolean;
 }
 
 export class WhatsAppBaileysChannel implements WhatsAppChannel {
   private sock?: WASocket;
+  private connected = false;
+  private reconnectAttempts = 0;
+  private reconnectTimer?: NodeJS.Timeout;
+  private connecting = false;
 
   constructor(
     private readonly config: WhatsAppChannelConfig,
@@ -63,57 +68,92 @@ export class WhatsAppBaileysChannel implements WhatsAppChannel {
     await socket.sendMessage(ownerJid, { text });
   }
 
+  isConnected(): boolean {
+    return this.connected && Boolean(this.sock);
+  }
+
   private async connect(): Promise<void> {
-    const { state, saveCreds } = await useMultiFileAuthState(this.config.authDir);
-    const { version } = await fetchLatestBaileysVersion();
+    if (this.connecting) return;
+    this.connecting = true;
 
-    this.sock = makeWASocket({
-      auth: state,
-      version,
-      printQRInTerminal: false,
-      markOnlineOnConnect: true,
-      syncFullHistory: false
-    });
+    try {
+      const { state, saveCreds } = await useMultiFileAuthState(this.config.authDir);
+      const { version } = await fetchLatestBaileysVersion();
 
-    this.sock.ev.on('creds.update', saveCreds);
+      this.sock = makeWASocket({
+        auth: state,
+        version,
+        printQRInTerminal: false,
+        markOnlineOnConnect: true,
+        syncFullHistory: false
+      });
 
-    this.sock.ev.on('connection.update', async (update) => {
-      const { connection, lastDisconnect, qr } = update;
+      this.sock.ev.on('creds.update', saveCreds);
 
-      if (qr) {
-        qrcode.generate(qr, { small: true });
-        console.log('[WhatsApp] QR code generated. Scan it with WhatsApp.');
-      }
+      this.sock.ev.on('connection.update', async (update) => {
+        const { connection, lastDisconnect, qr } = update;
 
-      if (connection === 'open') {
-        console.log('[WhatsApp] Connected. Session persisted on disk.');
-        await this.notifyOwner('WhatsApp channel online.');
-      }
-
-      if (connection === 'close') {
-        const statusCode = (lastDisconnect?.error as { output?: { statusCode?: number } } | undefined)
-          ?.output?.statusCode;
-
-        const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
-        console.warn('[WhatsApp] Connection closed.', { statusCode, shouldReconnect });
-
-        if (shouldReconnect) {
-          await this.connect();
+        if (qr) {
+          qrcode.generate(qr, { small: true });
+          console.log('[WhatsApp] QR code generated. Scan it with WhatsApp.');
         }
-      }
-    });
 
-    this.sock.ev.on('messages.upsert', async ({ messages, type }) => {
-      if (type !== 'notify') return;
-
-      for (const message of messages) {
-        try {
-          await this.handleIncomingMessage(message);
-        } catch (error) {
-          console.error('[WhatsApp] Error handling message:', error);
+        if (connection === 'open') {
+          this.connected = true;
+          this.reconnectAttempts = 0;
+          if (this.reconnectTimer) {
+            clearTimeout(this.reconnectTimer);
+            this.reconnectTimer = undefined;
+          }
+          console.log('[WhatsApp] Connected. Session persisted on disk.');
+          await this.notifyOwner('WhatsApp channel online.');
         }
-      }
-    });
+
+        if (connection === 'close') {
+          this.connected = false;
+          const statusCode = (lastDisconnect?.error as { output?: { statusCode?: number } } | undefined)
+            ?.output?.statusCode;
+
+          const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+          console.warn('[WhatsApp] Connection closed.', { statusCode, shouldReconnect });
+
+          if (shouldReconnect) {
+            this.scheduleReconnect();
+          }
+        }
+      });
+
+      this.sock.ev.on('messages.upsert', async ({ messages, type }) => {
+        if (type !== 'notify') return;
+
+        for (const message of messages) {
+          try {
+            await this.handleIncomingMessage(message);
+          } catch (error) {
+            console.error('[WhatsApp] Error handling message:', error);
+          }
+        }
+      });
+    } finally {
+      this.connecting = false;
+    }
+  }
+
+  private scheduleReconnect(): void {
+    if (this.reconnectTimer) {
+      return;
+    }
+
+    this.reconnectAttempts += 1;
+    const delayMs = Math.min(30000, 1000 * 2 ** Math.min(this.reconnectAttempts, 5));
+
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = undefined;
+      void this.connect().catch((error) => {
+        console.error('[WhatsApp] reconnect failed', error);
+        this.scheduleReconnect();
+      });
+    }, delayMs);
   }
 
   private async handleIncomingMessage(message: WAMessage): Promise<void> {

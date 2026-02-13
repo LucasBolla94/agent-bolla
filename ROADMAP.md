@@ -222,14 +222,14 @@ Bolla precisa ser cinco coisas:
 ## Fase 8 — Estabilidade e Operação 24/7 (Semana 13-14)
 > Deixar tudo sólido para rodar meses sem parar.
 
-- [ ] Error handling robusto em toda a aplicação
-- [ ] Reconnect automático (Baileys, Telegram, X)
-- [ ] Rate limiting para APIs externas
-- [ ] Health check periódico (Ollama, PostgreSQL, sessão X, Baileys)
-- [ ] Alertas pro dono se algo cair
-- [ ] Logs estruturados com níveis (info, warn, error)
-- [ ] Backup automático do PostgreSQL (cron diário)
-- [ ] Limpeza periódica de interações antigas de baixa qualidade
+- [x] Error handling robusto em toda a aplicação
+- [x] Reconnect automático (Baileys, Telegram, X)
+- [x] Rate limiting para APIs externas
+- [x] Health check periódico (Ollama, PostgreSQL, sessão X, Baileys)
+- [x] Alertas pro dono se algo cair
+- [x] Logs estruturados com níveis (info, warn, error)
+- [x] Backup automático do PostgreSQL (cron diário)
+- [x] Limpeza periódica de interações antigas de baixa qualidade
 
 **Entregável**: Agent autônomo, estável, rodando 24/7 sem intervenção humana.
 
@@ -246,6 +246,111 @@ Bolla precisa ser cinco coisas:
 | **v0.7** | Fase 5: Estuda e opina | Curiosidade e opinião própria |
 | **v0.9** | Fase 6: Melhora o próprio código | Autonomia técnica |
 | **v1.0** | Fases 7-8: Auto-análise + Estabilidade | **Agente autônomo completo** |
+| **v1.2** | Fases 9-12: Ferramentas + Autonomia Total | **Engenheiro de si mesmo** |
+
+---
+
+## v1.2 — Agente com Ferramentas, Liberdade e Expansão
+
+> **Filosofia v1.2**: Bolla deixa de ser apenas um agente que responde e pensa — ele age no mundo real.
+> Age como um engenheiro de software: usa o terminal, lê a web, opera git, conecta máquinas via SSH.
+> **Llama é o cérebro principal.** APIs pagas (Anthropic, Grok) são exceção, não regra.
+
+---
+
+## Fase 9 — Tool System: O Agent Usa Ferramentas Reais
+
+> O agent ganha um sistema de ferramentas que permite executar comandos, ler a web, operar git e conectar máquinas.
+
+### 9.1 — Tool Executor (src/tools/)
+- [x] `ToolExecutor` class com registro dinâmico de ferramentas
+- [x] Ferramenta `bash` — executa comandos shell com timeout e output capturado
+- [x] Ferramenta `web_read` — lê e extrai conteúdo legível de uma URL
+- [x] Ferramenta `file_read` / `file_write` — lê e escreve arquivos do próprio projeto
+- [x] Ferramenta `git` — operações git (status, add, commit, push, clone)
+- [x] Ferramenta `npm` — instala pacotes, roda scripts
+- [x] Ferramenta `ssh` — executa comandos em máquinas remotas via SSH
+
+### 9.2 — Agent Loop: ReAct Pattern (src/agent/)
+- [x] Loop: Llama planeja → Tool executa → Observa resultado → Decide próximo passo
+- [x] Máximo de N rounds configurável (padrão: 10)
+- [x] Llama local faz o planning (leve, rápido, sem custo)
+- [x] Anthropic/Grok só entram se a tarefa for marcada `complexity: complex`
+- [x] Histórico de passos como contexto para o próximo round
+
+### 9.3 — Web Reader (src/web/)
+- [x] `WebReader`: fetch() para páginas simples, Puppeteer para JS-heavy
+- [x] Extração de conteúdo limpo: título, texto principal, links relevantes
+- [x] Cache em memória (TTL 1h) para não buscar a mesma URL várias vezes
+- [x] Integrado no pipeline de estudo autônomo (Fase 5)
+
+**Entregável**: Agent que executa ferramentas reais como um engenheiro de software.
+
+---
+
+## Fase 10 — Llama-First: Eficiência e Independência de APIs
+
+> Llama local é o motor principal. APIs pagas são usadas apenas quando necessário.
+
+### 10.1 — Router Llama-First
+- [x] Novo PROVIDER_CHAIN:
+  - `simple`: Ollama → Ollama → Ollama (nunca escala)
+  - `medium`: Ollama → Grok → Anthropic
+  - `complex`: Ollama → Anthropic → Grok
+- [x] Flag `FORCE_LOCAL=true` no .env: bloqueia todas as APIs pagas
+- [x] Logging de custo estimado por provider por interação
+
+### 10.2 — Prompt Comprimido para Llama
+- [x] Personalidade comprimida: só os traits essenciais no context window do Llama
+- [x] Detecção automática de context window overflow e truncamento inteligente
+- [x] Llama gera respostas em pt-BR com personalidade de Bolla
+
+**Entregável**: Agent que roda 95% das interações com Llama local, zero custo de API.
+
+---
+
+## Fase 11 — Autonomia Expandida: Git, Backup e Self-Clone
+
+> Bolla se expande para outras máquinas e mantém backup permanente de tudo.
+
+### 11.1 — Auto Git Backup
+- [x] Após cada ciclo de estudo: `git commit` automático com mensagem gerada por Llama
+- [x] Após self-improvement aprovado: `git commit --push` automático
+- [x] Após atualização de personalidade: commit semântico no log do agent
+- [x] Scheduler diário: `git push origin main` para backup remoto
+
+### 11.2 — Self-Clone via SSH
+- [x] Comando: `!clone <user@host> <git_remote>` (WhatsApp/Telegram)
+- [x] O agent SSH na máquina remota, clona o repositório, instala deps, configura .env
+- [x] Inicia o agent remoto via PM2
+- [x] Notifica o dono com o IP/status do novo agent
+
+### 11.3 — Agent Network (Bus de Comunicação)
+- [ ] Cada agent expõe uma mini API HTTP local (porta configurável)
+- [ ] Agent principal pode delegar tarefas para agents na rede
+- [ ] "Hive mode": múltiplas instâncias com personalidades especializadas
+
+**Entregável**: Agent que se replica, mantém backup e coordena com outros agents.
+
+---
+
+## Fase 12 — Memória Auto-Adaptativa
+
+> A memória evolui sozinha — se consolida, melhora e descarta o que não serve.
+
+### 12.1 — Memory Consolidation
+- [x] Job periódico (a cada 24h): analisa memórias existentes
+- [x] Remove duplicatas (similaridade textual > 85%)
+- [x] Consolida memórias relacionadas em uma mais rica via Llama
+- [x] Promove memórias frequentemente acessadas (boost no rank de busca)
+
+### 12.2 — Memory Quality Score
+- [x] Cada memória ganha um `access_count` e `quality_score`
+- [x] Score calculado por: frequência de acesso + impacto nas respostas + recência
+- [x] Memórias com score < threshold são arquivadas ou deletadas automaticamente
+- [x] Relatório semanal pro dono: "X memórias consolidadas, Y removidas"
+
+**Entregável**: Memória que melhora sozinha, sem intervenção humana.
 
 ---
 
@@ -254,5 +359,8 @@ Bolla precisa ser cinco coisas:
 - **Memória > Fine-tuning**: lembrar é mais valioso do que retreinar
 - **Personalidade > Prompt**: o character está no banco, não no código
 - **Ação > Resposta**: o agent age, não apenas responde
+- **Llama > APIs pagas**: o cérebro local é o principal, APIs são exceção
+- **Ferramentas > Respostas**: um agent que age é mais poderoso que um que fala
 - **Evolução incremental**: cada fase entrega um agent mais capaz
 - **Aprovação humana para mudanças críticas**: o dono controla o que vai para produção
+- **Git é a memória do código**: todo estado importante é commitado

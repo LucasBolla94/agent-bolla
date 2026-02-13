@@ -3,8 +3,10 @@ import { env } from '../config/env.js';
 import { AiClientError } from './errors.js';
 import { AiTextClient, GenerateTextInput, GenerateTextOutput } from './types.js';
 import { isRetryableStatus, withRetry } from './utils.js';
+import { RateLimiter } from '../ops/rate-limiter.js';
 
 const PROVIDER = 'anthropic';
+const limiter = new RateLimiter(PROVIDER, Number(env.ANTHROPIC_MIN_INTERVAL_MS || '500'));
 
 interface AnthropicConfig {
   model: string;
@@ -40,7 +42,7 @@ export class AnthropicClient implements AiTextClient {
   public async generateText(input: GenerateTextInput): Promise<GenerateTextOutput> {
     const startedAt = Date.now();
 
-    const response = await withRetry(
+    const response = await limiter.run(async () => withRetry(
       async () => {
         try {
           return await this.client.messages.create({
@@ -56,7 +58,7 @@ export class AnthropicClient implements AiTextClient {
       },
       { attempts: this.config.retryAttempts },
       (error) => error instanceof AiClientError && error.retryable
-    );
+    ));
 
     const text = response.content
       .filter((block) => block.type === 'text')

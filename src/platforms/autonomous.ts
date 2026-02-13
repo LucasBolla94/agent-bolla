@@ -114,6 +114,12 @@ export class TwitterAutonomousScheduler {
         await task();
       } catch (error) {
         console.error(`[TwitterScheduler] job=${jobName} failed`, error);
+        try {
+          await this.deps.twitter.reconnect();
+          console.warn('[TwitterScheduler] attempted twitter reconnect after job failure.');
+        } catch (reconnectError) {
+          console.error('[TwitterScheduler] twitter reconnect failed', reconnectError);
+        }
       } finally {
         this.runningJobs.delete(jobName);
         this.scheduleNext(jobName, interval, execute);

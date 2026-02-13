@@ -288,6 +288,21 @@ export class TrainingDataCollector {
       total: parseInt(row.total, 10)
     }));
   }
+
+  async deleteLowQualityOlderThan(retentionDays: number, threshold: number): Promise<number> {
+    const safeDays = Number.isFinite(retentionDays) && retentionDays > 0 ? Math.floor(retentionDays) : 30;
+    const safeThreshold = Number.isFinite(threshold) ? threshold : 0.45;
+
+    const result = await db.query<{ id: number }>(
+      `DELETE FROM training_data
+       WHERE created_at < NOW() - ($1 || ' days')::interval
+         AND COALESCE(quality_score, 0) < $2
+       RETURNING id`,
+      [safeDays.toString(), safeThreshold]
+    );
+
+    return result.rowCount || 0;
+  }
 }
 
 export const collector = new TrainingDataCollector();

@@ -2,8 +2,10 @@ import { env } from '../config/env.js';
 import { AiClientError } from './errors.js';
 import { AiTextClient, GenerateTextInput, GenerateTextOutput } from './types.js';
 import { fetchWithTimeout, isRetryableStatus, withRetry } from './utils.js';
+import { RateLimiter } from '../ops/rate-limiter.js';
 
 const PROVIDER = 'ollama';
+const limiter = new RateLimiter(PROVIDER, Number(env.OLLAMA_MIN_INTERVAL_MS || '200'));
 
 interface OllamaConfig {
   apiUrl: string;
@@ -51,7 +53,7 @@ export class OllamaClient implements AiTextClient {
     const startedAt = Date.now();
 
     try {
-      const response = await withRetry(
+      const response = await limiter.run(async () => withRetry(
         async () => {
           const httpResponse = await fetchWithTimeout(
             this.config.apiUrl,
@@ -90,7 +92,7 @@ export class OllamaClient implements AiTextClient {
         },
         { attempts: this.config.retryAttempts },
         (error) => error instanceof AiClientError && error.retryable
-      );
+      ));
 
       const text = response.response?.trim();
       if (!text) {

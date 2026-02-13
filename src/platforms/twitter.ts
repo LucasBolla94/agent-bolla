@@ -1,6 +1,8 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import puppeteer, { Browser, CookieParam, ElementHandle, Page } from 'puppeteer';
+import { env } from '../config/env.js';
+import { RateLimiter } from '../ops/rate-limiter.js';
 
 export interface TwitterConfig {
   enabled: boolean;
@@ -34,6 +36,8 @@ export type TimelineKind = 'home' | 'following' | 'forYou';
 export class TwitterPlatform {
   private browser?: Browser;
   private page?: Page;
+  private connected = false;
+  private readonly apiLimiter = new RateLimiter('twitter', Number(env.TWITTER_API_MIN_INTERVAL_MS || '1200'));
 
   constructor(private readonly config: TwitterConfig) {}
 
@@ -43,23 +47,29 @@ export class TwitterPlatform {
       return;
     }
 
-    this.browser = await puppeteer.launch({
-      headless: this.config.headless,
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
-    });
+    try {
+      this.browser = await puppeteer.launch({
+        headless: this.config.headless,
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
+      });
 
-    this.page = await this.browser.newPage();
-    await this.page.setViewport({ width: 1440, height: 900 });
+      this.page = await this.browser.newPage();
+      await this.page.setViewport({ width: 1440, height: 900 });
 
-    await this.restoreSession();
-    await this.page.goto('https://x.com/home', { waitUntil: 'domcontentloaded' });
+      await this.restoreSession();
+      await this.goto('https://x.com/home');
 
-    if (!(await this.isAuthenticated())) {
-      throw new Error('Twitter session is not authenticated. Configure cookies or auth token in .env.');
+      if (!(await this.isAuthenticated())) {
+        throw new Error('Twitter session is not authenticated. Configure cookies or auth token in .env.');
+      }
+
+      await this.persistCookies();
+      this.connected = true;
+      console.log('[Twitter] Session initialized successfully.');
+    } catch (error) {
+      this.connected = false;
+      throw error;
     }
-
-    await this.persistCookies();
-    console.log('[Twitter] Session initialized successfully.');
   }
 
   async close(): Promise<void> {
@@ -68,7 +78,29 @@ export class TwitterPlatform {
       await this.browser.close();
       this.browser = undefined;
       this.page = undefined;
+      this.connected = false;
     }
+  }
+
+  isConnected(): boolean {
+    return this.connected && Boolean(this.page) && Boolean(this.browser);
+  }
+
+  async healthCheck(): Promise<boolean> {
+    if (!this.isConnected()) return false;
+
+    try {
+      await this.goto('https://x.com/home');
+      return await this.isAuthenticated();
+    } catch {
+      this.connected = false;
+      return false;
+    }
+  }
+
+  async reconnect(): Promise<void> {
+    await this.close();
+    await this.start();
   }
 
   async readTimeline(kind: TimelineKind = 'home', limit = 20): Promise<TwitterTweet[]> {
@@ -79,7 +111,7 @@ export class TwitterPlatform {
         ? 'https://x.com/home?filter=following'
         : 'https://x.com/home';
 
-    await page.goto(url, { waitUntil: 'domcontentloaded' });
+    await this.goto(url);
     await this.waitForSelector('article[data-testid="tweet"]');
     await this.autoScroll(2);
 
@@ -105,7 +137,7 @@ export class TwitterPlatform {
 
   async readProfile(username: string): Promise<{ name?: string; bio?: string; tweets: TwitterTweet[] }> {
     const page = this.getPage();
-    await page.goto(`https://x.com/${username}`, { waitUntil: 'domcontentloaded' });
+    await this.goto(`https://x.com/${username}`);
     await this.waitForSelector('main');
 
     const profile = await page.evaluate(() => {
@@ -121,7 +153,7 @@ export class TwitterPlatform {
 
   async readTrendingTopics(limit = 10): Promise<TwitterTrend[]> {
     const page = this.getPage();
-    await page.goto('https://x.com/explore/tabs/trending', { waitUntil: 'domcontentloaded' });
+    await this.goto('https://x.com/explore/tabs/trending');
     await this.waitForSelector('div[data-testid="trend"]');
 
     const trends = await page.$$eval('div[data-testid="trend"]', (nodes, max) => {
@@ -141,8 +173,7 @@ export class TwitterPlatform {
   }
 
   async postTweet(content: string): Promise<void> {
-    const page = this.getPage();
-    await page.goto('https://x.com/compose/post', { waitUntil: 'domcontentloaded' });
+    await this.goto('https://x.com/compose/post');
     await this.typeInComposer(content);
     await this.clickFirst([
       'button[data-testid="tweetButtonInline"]',
@@ -177,8 +208,7 @@ export class TwitterPlatform {
   }
 
   async replyToTweet(tweetUrl: string, content: string): Promise<void> {
-    const page = this.getPage();
-    await page.goto(tweetUrl, { waitUntil: 'domcontentloaded' });
+    await this.goto(tweetUrl);
     await this.clickFirst(['button[data-testid="reply"]']);
     await this.typeInComposer(content);
     await this.clickFirst([
@@ -189,23 +219,20 @@ export class TwitterPlatform {
   }
 
   async likeTweet(tweetUrl: string): Promise<void> {
-    const page = this.getPage();
-    await page.goto(tweetUrl, { waitUntil: 'domcontentloaded' });
+    await this.goto(tweetUrl);
     await this.clickFirst(['button[data-testid="like"]']);
     await this.sleep(700);
   }
 
   async retweet(tweetUrl: string): Promise<void> {
-    const page = this.getPage();
-    await page.goto(tweetUrl, { waitUntil: 'domcontentloaded' });
+    await this.goto(tweetUrl);
     await this.clickFirst(['button[data-testid="retweet"]']);
     await this.clickFirst(['div[data-testid="retweetConfirm"]']);
     await this.sleep(700);
   }
 
   async quoteTweet(tweetUrl: string, content: string): Promise<void> {
-    const page = this.getPage();
-    await page.goto(tweetUrl, { waitUntil: 'domcontentloaded' });
+    await this.goto(tweetUrl);
     await this.clickFirst(['button[data-testid="retweet"]']);
     await this.clickFirst(['a[href*="compose/post"]', 'div[role="menuitem"]']);
     await this.typeInComposer(content);
@@ -218,7 +245,7 @@ export class TwitterPlatform {
 
   async readDMs(limit = 20): Promise<TwitterDM[]> {
     const page = this.getPage();
-    await page.goto('https://x.com/messages', { waitUntil: 'domcontentloaded' });
+    await this.goto('https://x.com/messages');
     await this.waitForSelector('[data-testid="cellInnerDiv"]');
 
     const dms = await page.$$eval('[data-testid="cellInnerDiv"]', (nodes, max) => {
@@ -240,7 +267,7 @@ export class TwitterPlatform {
 
   async readMentions(limit = 20): Promise<TwitterTweet[]> {
     const page = this.getPage();
-    await page.goto('https://x.com/notifications/mentions', { waitUntil: 'domcontentloaded' });
+    await this.goto('https://x.com/notifications/mentions');
     await this.waitForSelector('article[data-testid="tweet"]');
     await this.autoScroll(1);
 
@@ -265,15 +292,13 @@ export class TwitterPlatform {
   }
 
   async follow(username: string): Promise<void> {
-    const page = this.getPage();
-    await page.goto(`https://x.com/${username}`, { waitUntil: 'domcontentloaded' });
+    await this.goto(`https://x.com/${username}`);
     await this.clickFirst(['button[data-testid$="follow"]']);
     await this.sleep(600);
   }
 
   async unfollow(username: string): Promise<void> {
-    const page = this.getPage();
-    await page.goto(`https://x.com/${username}`, { waitUntil: 'domcontentloaded' });
+    await this.goto(`https://x.com/${username}`);
     await this.clickFirst(['button[data-testid$="unfollow"]']);
     await this.clickFirst(['button[data-testid="confirmationSheetConfirm"]']);
     await this.sleep(600);
@@ -355,6 +380,13 @@ export class TwitterPlatform {
   private async waitForSelector(selector: string): Promise<void> {
     const page = this.getPage();
     await page.waitForSelector(selector, { timeout: 30000 });
+  }
+
+  private async goto(url: string): Promise<void> {
+    const page = this.getPage();
+    await this.apiLimiter.run(async () => {
+      await page.goto(url, { waitUntil: 'domcontentloaded' });
+    });
   }
 
   private async autoScroll(turns: number): Promise<void> {
@@ -440,7 +472,7 @@ export class TwitterPlatform {
 
   private async isAuthenticated(): Promise<boolean> {
     const page = this.getPage();
-    await page.goto('https://x.com/home', { waitUntil: 'domcontentloaded' });
+    await this.goto('https://x.com/home');
 
     const currentUrl = page.url();
     if (currentUrl.includes('/login')) {
