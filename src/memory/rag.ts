@@ -60,6 +60,7 @@ export class RagService {
     const searchQuery = extractedKeywords.length > 0 ? extractedKeywords.join(' ') : message;
 
     const usedMemories = await this.memoryService.search(searchQuery, this.topMemories);
+    await this.memoryService.markAccessed(usedMemories.map((memory) => memory.id));
     const shortTermContext = this.shortTermMemory.formatContext(context.conversationId);
     const personality = await this.resolvePersonality();
 

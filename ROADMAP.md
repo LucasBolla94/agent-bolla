@@ -195,14 +195,14 @@ Bolla precisa ser cinco coisas:
 > O agent usa seu histórico de interações para entender onde está errando e melhorar.
 
 ### 7.1 — Análise de padrões de qualidade
-- [ ] Rodar análise periódica no `interaction_log`:
+- [x] Rodar análise periódica no `interaction_log`:
   - Quais tipos de resposta têm score mais alto?
   - Quais perguntas o agent responde pior?
   - Quais memórias são mais úteis (frequentemente recuperadas)?
-- [ ] Usar Anthropic para interpretar os padrões: "O que posso melhorar?"
+- [x] Usar Anthropic para interpretar os padrões: "O que posso melhorar?"
 
 ### 7.2 — Dashboard de auto-conhecimento (via comando do dono)
-- [ ] `!analytics` retorna:
+- [x] `!analytics` retorna:
   - Total de interações por canal e tipo
   - Score médio de qualidade por tipo
   - Memórias mais acessadas
@@ -210,10 +210,10 @@ Bolla precisa ser cinco coisas:
   - Sugestões automáticas de melhoria
 
 ### 7.3 — Ajuste automático de personalidade
-- [ ] Com base na análise, o agent pode sugerir ao dono:
+- [x] Com base na análise, o agent pode sugerir ao dono:
   - "Minhas respostas sobre X são fracas — posso estudar mais sobre isso"
   - "Meu humor_atual está desatualizado — sugiro atualizar para Y"
-- [ ] Dono aprova ou ajusta via comando
+- [x] Dono aprova ou ajusta via comando
 
 **Entregável**: Agent que entende seus próprios padrões e usa isso para evoluir ativamente.
 

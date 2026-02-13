@@ -14,6 +14,7 @@ import { ConversationsRepository, ConversationMessage } from '../database/reposi
 import { UserRecord, UsersRepository } from '../database/repositories/users.js';
 import { PermissionService } from '../core/permissions.js';
 import { SelfImprovementService } from '../self-improvement/service.js';
+import { AnalyticsService } from '../analytics/service.js';
 
 export interface WhatsAppChannelConfig {
   authDir: string;
@@ -26,6 +27,7 @@ export interface WhatsAppChannelDeps {
   memory: MemoryService;
   personality: PersonalityService;
   selfImprovement: SelfImprovementService;
+  analytics: AnalyticsService;
   usersRepo: UsersRepository;
   conversationsRepo: ConversationsRepository;
   permissions: PermissionService;
@@ -209,7 +211,8 @@ export class WhatsAppBaileysChannel implements WhatsAppChannel {
           '!personalidade ver — ver traits atuais\n' +
           '!personalidade set <trait> <valor> — editar trait\n' +
           '!code analyze — rodar ciclo de auto-melhoria\n' +
-          '!approval approve <id> | !approval reject <id>'
+          '!approval approve <id> | !approval reject <id>\n' +
+          '!analytics [suggest|approve <id>|reject <id>]'
         );
       }
       return 'Comandos: !status, !ping, !help';
@@ -269,6 +272,39 @@ export class WhatsAppBaileysChannel implements WhatsAppChannel {
         action as 'approve' | 'reject'
       );
       return result;
+    }
+
+    if (cmd === '!analytics') {
+      const sub = parts[1]?.toLowerCase();
+
+      if (!sub) {
+        return this.deps.analytics.formatDashboardText();
+      }
+
+      if (sub === 'suggest') {
+        const result = await this.deps.analytics.runPatternAnalysisCycle();
+        const summary = result.suggestions.length === 0
+          ? 'Nenhuma sugestão nova.'
+          : result.suggestions.map((s) => `#${s.id} ${s.trait}: ${s.suggestedValue.slice(0, 60)}`).join('\n');
+
+        return `Insights:\n${result.insights.slice(0, 800)}\n\nSugestões:\n${summary}`;
+      }
+
+      if ((sub === 'approve' || sub === 'reject') && parts[2]) {
+        const id = Number(parts[2]);
+        if (!Number.isFinite(id)) return 'ID inválido.';
+        return this.deps.analytics.reviewSuggestion(id, sub === 'approve');
+      }
+
+      if (sub === 'pending') {
+        const pending = await this.deps.analytics.listPendingSuggestions(10);
+        if (pending.length === 0) return 'Sem sugestões pendentes.';
+        return pending
+          .map((s) => `#${s.id} ${s.trait}: ${s.suggestedValue.slice(0, 70)}`)
+          .join('\n');
+      }
+
+      return 'Uso: !analytics | !analytics suggest | !analytics pending | !analytics approve <id> | !analytics reject <id>';
     }
 
     return 'Comando não reconhecido. Use !help';

@@ -18,6 +18,7 @@ export interface Memory {
   embeddingText: string;
   category: MemoryCategory | null;
   source: MemorySource | null;
+  accessCount: number;
   createdAt: Date;
 }
 

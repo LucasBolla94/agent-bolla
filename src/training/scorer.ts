@@ -45,7 +45,7 @@ export const computeQualityScore = (entry: TrainingEntry): number => {
     }
   }
 
-  if (entry.type === 'study' || entry.type === 'code_analysis' || entry.type === 'opinion') {
+  if (entry.type === 'study' || entry.type === 'code_analysis' || entry.type === 'opinion' || entry.type === 'analytics') {
     score += 0.1;
   }
 

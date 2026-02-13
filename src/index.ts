@@ -9,6 +9,8 @@ import { CuriosityEngine, OpinionEngine, createStudyAutonomousScheduler } from '
 import { StudySessionsRepository } from './database/repositories/study-sessions.js';
 import { createTwitterAutonomousScheduler, createTwitterPlatform } from './platforms/index.js';
 import { createSelfImprovementService } from './self-improvement/index.js';
+import { AnalyticsService, createAnalyticsScheduler } from './analytics/index.js';
+import { PersonalitySuggestionsRepository } from './database/repositories/personality-suggestions.js';
 import { collector } from './training/index.js';
 
 async function main(): Promise<void> {
@@ -64,13 +66,23 @@ async function main(): Promise<void> {
     const selfImprovement = createSelfImprovementService(router, collector);
     console.log(`Self-improvement service initialized (enabled=${env.SELF_IMPROVEMENT_ENABLED}).`);
 
+    const analyticsService = new AnalyticsService(
+      collector,
+      memory,
+      personality,
+      router,
+      new PersonalitySuggestionsRepository()
+    );
+    const analyticsScheduler = createAnalyticsScheduler(analyticsService);
+    console.log(`Analytics service initialized (enabled=${env.ANALYTICS_AUTONOMOUS_ENABLED}).`);
+
     // WhatsApp channel (phase 3.1)
-    const whatsapp = createWhatsAppChannel(rag, memory, personality, selfImprovement);
+    const whatsapp = createWhatsAppChannel(rag, memory, personality, selfImprovement, analyticsService);
     await whatsapp.start();
     console.log(`WhatsApp channel initialized (enabled=${env.WHATSAPP_ENABLED}).`);
 
     // Telegram channel (phase 3.2)
-    const telegram = createTelegramChannel(rag, memory, personality, selfImprovement);
+    const telegram = createTelegramChannel(rag, memory, personality, selfImprovement, analyticsService);
     await telegram.start();
     console.log(`Telegram channel initialized (enabled=${env.TELEGRAM_ENABLED}).`);
 
@@ -82,6 +94,15 @@ async function main(): Promise<void> {
       name: 'telegram',
       notify: async (text) => telegram.notifyOwner(text)
     });
+    analyticsScheduler.registerNotifier({
+      name: 'whatsapp',
+      notify: async (text) => whatsapp.notifyOwner(text)
+    });
+    analyticsScheduler.registerNotifier({
+      name: 'telegram',
+      notify: async (text) => telegram.notifyOwner(text)
+    });
+    analyticsScheduler.start();
 
     // Twitter platform (phase 4.1)
     const twitter = createTwitterPlatform();
@@ -118,7 +139,7 @@ async function main(): Promise<void> {
     console.log(`Study autonomous scheduler initialized (enabled=${env.STUDY_AUTONOMOUS_ENABLED}).`);
 
     console.log('Agent Bolla initialized successfully!');
-    console.log('Phases 1.1 / 1.2 / 1.3 / 2.1 / 2.2 / 2.3 / 3.1 / 3.2 / 3.3 / 4.1 / 4.2 / 4.3 / 5.1 / 5.2 / 5.3 / 6 complete.');
+    console.log('Phases 1.1 / 1.2 / 1.3 / 2.1 / 2.2 / 2.3 / 3.1 / 3.2 / 3.3 / 4.1 / 4.2 / 4.3 / 5.1 / 5.2 / 5.3 / 6 / 7 complete.');
 
     // Expose for use in subsequent phases
     void router;
@@ -133,6 +154,8 @@ async function main(): Promise<void> {
     void curiosity;
     void opinionEngine;
     void selfImprovement;
+    void analyticsService;
+    void analyticsScheduler;
 
   } catch (error) {
     console.error('Error initializing agent:', error);

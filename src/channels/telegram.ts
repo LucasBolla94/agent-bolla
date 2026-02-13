@@ -7,6 +7,7 @@ import { UserRecord, UsersRepository } from '../database/repositories/users.js';
 import { PermissionService } from '../core/permissions.js';
 import { CodeImprovementsRepository } from '../database/repositories/code-improvements.js';
 import { SelfImprovementService } from '../self-improvement/service.js';
+import { AnalyticsService } from '../analytics/service.js';
 
 export interface TelegramChannelConfig {
   enabled: boolean;
@@ -19,6 +20,7 @@ export interface TelegramChannelDeps {
   memory: MemoryService;
   personality: PersonalityService;
   selfImprovement: SelfImprovementService;
+  analytics: AnalyticsService;
   usersRepo: UsersRepository;
   conversationsRepo: ConversationsRepository;
   permissions: PermissionService;
@@ -117,7 +119,8 @@ export class TelegramGrammYChannel implements TelegramChannel {
           '/personalidade — ver traits atuais\n' +
           '/personalidade_set <trait> <valor> — editar trait\n' +
           '/approval <id> — revisar melhoria de código\n' +
-          '/code_analyze — rodar ciclo de auto-melhoria'
+          '/code_analyze — rodar ciclo de auto-melhoria\n' +
+          '/analytics [suggest|pending|approve <id>|reject <id>]'
         );
       } else {
         await ctx.reply('Comandos: /start, /help, /status, /ping');
@@ -150,6 +153,10 @@ export class TelegramGrammYChannel implements TelegramChannel {
 
     bot.command('code_analyze', async (ctx) => {
       await this.handleCodeAnalyzeCommand(ctx);
+    });
+
+    bot.command('analytics', async (ctx) => {
+      await this.handleAnalyticsCommand(ctx);
     });
 
     bot.on('callback_query:data', async (ctx) => {
@@ -325,6 +332,67 @@ export class TelegramGrammYChannel implements TelegramChannel {
       `Sugestões: ${summary.suggestions.length}\n` +
       `Propostas criadas: ${summary.createdProposals.length}`
     );
+  }
+
+  private async handleAnalyticsCommand(ctx: Context): Promise<void> {
+    let user = await this.getOrCreateTelegramUser(ctx);
+    if (!user) return;
+
+    if (this.config.ownerTelegramId && String(ctx.from?.id || '') === this.config.ownerTelegramId && user.role !== 'owner') {
+      const promoted = await this.deps.usersRepo.updateRole(user.id, 'owner');
+      if (promoted) user = promoted;
+    }
+
+    if (user.role !== 'owner') {
+      await ctx.reply('Sem permissão.');
+      return;
+    }
+
+    const text = ctx.message?.text || '/analytics';
+    const parts = text.trim().split(/\s+/);
+    const sub = parts[1]?.toLowerCase();
+
+    if (!sub) {
+      await ctx.reply(await this.deps.analytics.formatDashboardText());
+      return;
+    }
+
+    if (sub === 'suggest') {
+      const result = await this.deps.analytics.runPatternAnalysisCycle();
+      const summary = result.suggestions.length === 0
+        ? 'Nenhuma sugestão nova.'
+        : result.suggestions.map((s) => `#${s.id} ${s.trait}: ${s.suggestedValue.slice(0, 60)}`).join('\n');
+
+      await ctx.reply(`Insights:\n${result.insights.slice(0, 900)}\n\nSugestões:\n${summary}`);
+      return;
+    }
+
+    if (sub === 'pending') {
+      const pending = await this.deps.analytics.listPendingSuggestions(10);
+      if (pending.length === 0) {
+        await ctx.reply('Sem sugestões pendentes.');
+        return;
+      }
+
+      await ctx.reply(
+        pending.map((s) => `#${s.id} ${s.trait}: ${s.suggestedValue.slice(0, 70)}`).join('\n')
+      );
+      return;
+    }
+
+    if ((sub === 'approve' || sub === 'reject') && parts[2]) {
+      const id = Number(parts[2]);
+      if (!Number.isFinite(id)) {
+        await ctx.reply('ID inválido.');
+        return;
+      }
+
+      const response = await this.deps.analytics.reviewSuggestion(id, sub === 'approve');
+      await ctx.reply(response);
+      return;
+    }
+
+    await ctx.reply('Uso: /analytics [suggest|pending|approve <id>|reject <id>]');
   }
 
   private async handleTextMessage(ctx: Context): Promise<void> {

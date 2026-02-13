@@ -7,6 +7,7 @@ interface MemoryRow {
   embedding_text: string;
   category: string | null;
   source: string | null;
+  access_count: number;
   created_at: Date;
 }
 
@@ -16,7 +17,8 @@ const toMemory = (row: MemoryRow): Memory => ({
   embeddingText: row.embedding_text,
   category: row.category as Memory['category'],
   source: row.source as Memory['source'],
-  createdAt: row.created_at,
+  accessCount: row.access_count ?? 0,
+  createdAt: row.created_at
 });
 
 export class MemoryStore {
@@ -85,7 +87,7 @@ export class MemoryStore {
    */
   async findByCategory(category: string, limit = 20): Promise<Memory[]> {
     const result = await db.query<MemoryRow>(
-      `SELECT * FROM memories WHERE category = $1 ORDER BY created_at DESC LIMIT $2`,
+      'SELECT * FROM memories WHERE category = $1 ORDER BY created_at DESC LIMIT $2',
       [category, limit]
     );
 
@@ -98,5 +100,27 @@ export class MemoryStore {
   async count(): Promise<number> {
     const result = await db.query<{ total: string }>('SELECT COUNT(*) as total FROM memories');
     return parseInt(result.rows[0].total, 10);
+  }
+
+  async incrementAccessCounts(memoryIds: number[]): Promise<void> {
+    if (memoryIds.length === 0) return;
+
+    await db.query(
+      `UPDATE memories
+       SET access_count = access_count + 1
+       WHERE id = ANY($1::int[])`,
+      [memoryIds]
+    );
+  }
+
+  async topAccessed(limit = 10): Promise<Memory[]> {
+    const result = await db.query<MemoryRow>(
+      `SELECT * FROM memories
+       ORDER BY access_count DESC, created_at DESC
+       LIMIT $1`,
+      [limit]
+    );
+
+    return result.rows.map(toMemory);
   }
 }

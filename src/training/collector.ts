@@ -234,6 +234,60 @@ export class TrainingDataCollector {
       }))
       .filter((row) => row.topic.length > 0 && Number.isFinite(row.score));
   }
+
+  async statsBySourceAndType(): Promise<Array<{
+    source: string;
+    type: string;
+    total: number;
+    avgScore: number;
+  }>> {
+    const result = await db.query<{
+      source: string;
+      type: string;
+      total: string;
+      avg_score: string;
+    }>(
+      `SELECT source, type, COUNT(*)::text as total, AVG(quality_score)::text as avg_score
+       FROM training_data
+       GROUP BY source, type
+       ORDER BY source ASC, type ASC`
+    );
+
+    return result.rows.map((row) => ({
+      source: row.source,
+      type: row.type,
+      total: parseInt(row.total, 10),
+      avgScore: parseFloat((Number(row.avg_score || '0')).toFixed(2))
+    }));
+  }
+
+  async topDiscussedTopics(limit = 10): Promise<Array<{ topic: string; total: number }>> {
+    const result = await db.query<{ topic: string; total: string }>(
+      `WITH extracted AS (
+         SELECT
+           COALESCE(
+             NULLIF(metadata->>'topic', ''),
+             CASE
+               WHEN context IS NOT NULL AND context <> '' THEN (context::jsonb ->> 'topic')
+               ELSE NULL
+             END
+           ) AS topic
+         FROM training_data
+       )
+       SELECT LOWER(TRIM(topic)) AS topic, COUNT(*)::text as total
+       FROM extracted
+       WHERE topic IS NOT NULL AND TRIM(topic) <> ''
+       GROUP BY LOWER(TRIM(topic))
+       ORDER BY COUNT(*) DESC
+       LIMIT $1`,
+      [limit]
+    );
+
+    return result.rows.map((row) => ({
+      topic: row.topic,
+      total: parseInt(row.total, 10)
+    }));
+  }
 }
 
 export const collector = new TrainingDataCollector();

@@ -4,7 +4,8 @@ export type TrainingDataType =
   | 'tweet_write'
   | 'study'
   | 'code_analysis'
-  | 'opinion';
+  | 'opinion'
+  | 'analytics';
 
 export type TrainingDataSource = 'whatsapp' | 'telegram' | 'twitter' | 'internal';
 

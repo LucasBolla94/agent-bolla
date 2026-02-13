@@ -34,7 +34,7 @@ export class MemoryService {
         content: fact,
         embeddingText: fact,
         category: resolvedCategory ?? 'general',
-        source,
+        source
       });
 
       console.info(`[Memory] stored fact id=${memory.id} category=${memory.category}: "${fact.slice(0, 80)}"`);
@@ -85,7 +85,7 @@ export class MemoryService {
       content,
       embeddingText: content,
       category,
-      source,
+      source
     });
   }
 
@@ -94,5 +94,13 @@ export class MemoryService {
    */
   async count(): Promise<number> {
     return this.store.count();
+  }
+
+  async markAccessed(memoryIds: number[]): Promise<void> {
+    await this.store.incrementAccessCounts(memoryIds);
+  }
+
+  async topAccessed(limit = 10): Promise<Memory[]> {
+    return this.store.topAccessed(limit);
   }
 }
