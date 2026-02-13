@@ -29,7 +29,7 @@
 
 ---
 
-## Fase 1 — Cérebro Básico + Coleta de Dados (Semana 2)
+## Fase 1 — Cérebro Básico + Coleta de Dados (Semana 2) ✅ CONCLUÍDA
 > O agent pensa e já começa a salvar tudo para treino futuro.
 
 ### 1.1 — Clientes AI
@@ -53,15 +53,15 @@
 - [x] Logging de qual AI foi usada e tempo de resposta
 
 ### 1.3 — Training Data Collector
-- [ ] Middleware que intercepta TODA interação do agent
-- [ ] Salva na tabela `training_data`:
+- [x] Middleware que intercepta TODA interação do agent
+- [x] Salva na tabela `training_data`:
   - `type`: conversation | tweet_read | tweet_write | study | code_analysis | opinion
   - `input`: o que foi recebido/perguntado
   - `context`: canal, tipo de user, tópico, memórias usadas
   - `output`: o que o agent respondeu/gerou
   - `source`: whatsapp | telegram | twitter | internal
   - `metadata`: AI usada, tempo de resposta, tokens gastos
-- [ ] Auto quality score básico:
+- [x] Auto quality score básico:
   - Conversas longas (user engajou) → score alto
   - Respostas curtas demais → score baixo
   - Tweets com engajamento → score alto
