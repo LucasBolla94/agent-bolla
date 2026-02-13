@@ -3,6 +3,7 @@ import { createAiClients, createRouter } from './ai/index.js';
 import { db } from './database/connection.js';
 import { runMigrations } from './database/migrate.js';
 import { createMemoryService, createRagService } from './memory/index.js';
+import { createPersonalityService } from './personality/index.js';
 import { collector } from './training/index.js';
 
 async function main(): Promise<void> {
@@ -39,22 +40,30 @@ async function main(): Promise<void> {
     const memoryCount = await memory.count();
     console.log(`Memory service ready. Memories stored: ${memoryCount}`);
 
-    // RAG runtime pipeline + short-term memory (phase 2.2)
+    // Personality service (phase 2.3)
+    const personality = await createPersonalityService();
+    console.log(`Personality loaded. Agent name: ${personality.get('nome')}`);
+
+    // RAG runtime pipeline + short-term memory (phase 2.2) — connected to personality
     const rag = createRagService({
       memoryService: memory,
       router,
       collector,
-      shortTermLimit: 10
+      shortTermLimit: 10,
+      options: {
+        personalityProvider: async () => personality.buildSystemPrompt(),
+      },
     });
     console.log('RAG service ready (keywords + memory retrieval + short-term context).');
 
     console.log('Agent Bolla initialized successfully!');
-    console.log('Phases 1.1 / 1.2 / 1.3 / 2.1 / 2.2 complete.');
+    console.log('Phases 1.1 / 1.2 / 1.3 / 2.1 / 2.2 / 2.3 complete.');
 
     // Expose for use in subsequent phases
     void router;
     void memory;
     void rag;
+    void personality;
 
   } catch (error) {
     console.error('Error initializing agent:', error);

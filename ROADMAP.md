@@ -70,7 +70,7 @@
 
 ---
 
-## Fase 2 — Memória RAG (Semana 3)
+## Fase 2 — Memória RAG (Semana 3) ✅ CONCLUÍDA
 > O agent ganha seu "caderno" — lembra de tudo.
 
 ### 2.1 — Memória de longo prazo
@@ -90,11 +90,11 @@
 - [x] Memória de curto prazo: manter últimas 10 mensagens da conversa atual em memória
 
 ### 2.3 — Personalidade persistente
-- [ ] Tabela `personality` com traits:
+- [x] Tabela `personality` com traits:
   - `nome`, `estilo_fala`, `emojis`, `gírias`, `opiniões`, `interesses`
   - `humor_atual`, `tópico_favorito_atual`, `nível_formalidade`
-- [ ] Carregar personalidade no startup e injetar em todo prompt
-- [ ] Dono pode editar traits via comando
+- [x] Carregar personalidade no startup e injetar em todo prompt
+- [x] Dono pode editar traits via comando
 
 **Entregável**: Agent que lembra de conversas passadas e mantém personalidade consistente.
 
