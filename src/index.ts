@@ -8,6 +8,7 @@ import { createPersonalityService } from './personality/index.js';
 import { CuriosityEngine, OpinionEngine, createStudyAutonomousScheduler } from './autonomy/index.js';
 import { StudySessionsRepository } from './database/repositories/study-sessions.js';
 import { createTwitterAutonomousScheduler, createTwitterPlatform } from './platforms/index.js';
+import { createSelfImprovementService } from './self-improvement/index.js';
 import { collector } from './training/index.js';
 
 async function main(): Promise<void> {
@@ -60,15 +61,27 @@ async function main(): Promise<void> {
     });
     console.log('RAG service ready (keywords + memory retrieval + short-term context).');
 
+    const selfImprovement = createSelfImprovementService(router, collector);
+    console.log(`Self-improvement service initialized (enabled=${env.SELF_IMPROVEMENT_ENABLED}).`);
+
     // WhatsApp channel (phase 3.1)
-    const whatsapp = createWhatsAppChannel(rag, memory, personality);
+    const whatsapp = createWhatsAppChannel(rag, memory, personality, selfImprovement);
     await whatsapp.start();
     console.log(`WhatsApp channel initialized (enabled=${env.WHATSAPP_ENABLED}).`);
 
     // Telegram channel (phase 3.2)
-    const telegram = createTelegramChannel(rag, memory, personality);
+    const telegram = createTelegramChannel(rag, memory, personality, selfImprovement);
     await telegram.start();
     console.log(`Telegram channel initialized (enabled=${env.TELEGRAM_ENABLED}).`);
+
+    selfImprovement.registerNotifier({
+      name: 'whatsapp',
+      notify: async (text) => whatsapp.notifyOwner(text)
+    });
+    selfImprovement.registerNotifier({
+      name: 'telegram',
+      notify: async (text) => telegram.notifyOwner(text)
+    });
 
     // Twitter platform (phase 4.1)
     const twitter = createTwitterPlatform();
@@ -105,7 +118,7 @@ async function main(): Promise<void> {
     console.log(`Study autonomous scheduler initialized (enabled=${env.STUDY_AUTONOMOUS_ENABLED}).`);
 
     console.log('Agent Bolla initialized successfully!');
-    console.log('Phases 1.1 / 1.2 / 1.3 / 2.1 / 2.2 / 2.3 / 3.1 / 3.2 / 3.3 / 4.1 / 4.2 / 4.3 / 5.1 / 5.2 / 5.3 complete.');
+    console.log('Phases 1.1 / 1.2 / 1.3 / 2.1 / 2.2 / 2.3 / 3.1 / 3.2 / 3.3 / 4.1 / 4.2 / 4.3 / 5.1 / 5.2 / 5.3 / 6 complete.');
 
     // Expose for use in subsequent phases
     void router;
@@ -119,6 +132,7 @@ async function main(): Promise<void> {
     void studyScheduler;
     void curiosity;
     void opinionEngine;
+    void selfImprovement;
 
   } catch (error) {
     console.error('Error initializing agent:', error);

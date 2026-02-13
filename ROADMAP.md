@@ -169,13 +169,13 @@ Bolla precisa ser cinco coisas:
 > Esta é a fase central da missão. O agent melhora seu próprio código.
 
 ### 6.1 — Análise do próprio código
-- [ ] Ler seus próprios arquivos `.ts`
-- [ ] Enviar para Anthropic: "Analise este código. Bugs? Performance? Legibilidade?"
-- [ ] Categorizar sugestões: bug fix, refactor, feature, otimização
-- [ ] Registrar análises no `interaction_log` (tipo: `code_analysis`)
+- [x] Ler seus próprios arquivos `.ts`
+- [x] Enviar para Anthropic: "Analise este código. Bugs? Performance? Legibilidade?"
+- [x] Categorizar sugestões: bug fix, refactor, feature, otimização
+- [x] Registrar análises no `interaction_log` (tipo: `code_analysis`)
 
 ### 6.2 — Propor e implementar melhorias
-- [ ] Para cada sugestão viável:
+- [x] Para cada sugestão viável:
   1. Gerar código novo via Anthropic
   2. Criar branch git (`improvement/descricao-curta`)
   3. Aplicar mudança e compilar (`npm run build`)
@@ -184,8 +184,8 @@ Bolla precisa ser cinco coisas:
      - Botões: ✅ Aprovar | ❌ Rejeitar
 
 ### 6.3 — Deploy autônomo após aprovação
-- [ ] Aprovação → merge → build → `pm2 restart agent` → confirmação ao dono
-- [ ] Rejeição → deletar branch → registrar no log o que NÃO fazer (aprendizado)
+- [x] Aprovação → merge → build → `pm2 restart agent` → confirmação ao dono
+- [x] Rejeição → deletar branch → registrar no log o que NÃO fazer (aprendizado)
 
 **Entregável**: Agent que se analisa, propõe melhorias e deploya uma versão melhor de si mesmo.
 

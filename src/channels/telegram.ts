@@ -6,6 +6,7 @@ import { ConversationsRepository, ConversationMessage } from '../database/reposi
 import { UserRecord, UsersRepository } from '../database/repositories/users.js';
 import { PermissionService } from '../core/permissions.js';
 import { CodeImprovementsRepository } from '../database/repositories/code-improvements.js';
+import { SelfImprovementService } from '../self-improvement/service.js';
 
 export interface TelegramChannelConfig {
   enabled: boolean;
@@ -17,6 +18,7 @@ export interface TelegramChannelDeps {
   rag: RagService;
   memory: MemoryService;
   personality: PersonalityService;
+  selfImprovement: SelfImprovementService;
   usersRepo: UsersRepository;
   conversationsRepo: ConversationsRepository;
   permissions: PermissionService;
@@ -114,7 +116,8 @@ export class TelegramGrammYChannel implements TelegramChannel {
           '/aprender <fato> — ensinar algo novo\n' +
           '/personalidade — ver traits atuais\n' +
           '/personalidade_set <trait> <valor> — editar trait\n' +
-          '/approval <id> — revisar melhoria de código'
+          '/approval <id> — revisar melhoria de código\n' +
+          '/code_analyze — rodar ciclo de auto-melhoria'
         );
       } else {
         await ctx.reply('Comandos: /start, /help, /status, /ping');
@@ -143,6 +146,10 @@ export class TelegramGrammYChannel implements TelegramChannel {
 
     bot.command('approval', async (ctx) => {
       await this.handleApprovalCommand(ctx);
+    });
+
+    bot.command('code_analyze', async (ctx) => {
+      await this.handleCodeAnalyzeCommand(ctx);
     });
 
     bot.on('callback_query:data', async (ctx) => {
@@ -282,15 +289,12 @@ export class TelegramGrammYChannel implements TelegramChannel {
 
     const action = match[1];
     const id = Number(match[2]);
-    const status = action === 'approve' ? 'approved' : 'rejected';
+    const result = await this.deps.selfImprovement.handleApproval(
+      id,
+      action === 'approve' ? 'approve' : 'reject'
+    );
 
-    const updated = await this.deps.codeImprovementsRepo.setStatus(id, status);
-    if (!updated) {
-      await ctx.answerCallbackQuery({ text: 'Registro nao encontrado.', show_alert: true });
-      return;
-    }
-
-    await ctx.answerCallbackQuery({ text: `Status atualizado para ${status}.` });
+    await ctx.answerCallbackQuery({ text: result.slice(0, 180) });
 
     if (ctx.callbackQuery?.message?.chat?.id && ctx.callbackQuery.message.message_id) {
       await ctx.api.editMessageReplyMarkup(
@@ -299,6 +303,28 @@ export class TelegramGrammYChannel implements TelegramChannel {
         { reply_markup: new InlineKeyboard() }
       );
     }
+  }
+
+  private async handleCodeAnalyzeCommand(ctx: Context): Promise<void> {
+    let user = await this.getOrCreateTelegramUser(ctx);
+    if (!user) return;
+
+    if (this.config.ownerTelegramId && String(ctx.from?.id || '') === this.config.ownerTelegramId && user.role !== 'owner') {
+      const promoted = await this.deps.usersRepo.updateRole(user.id, 'owner');
+      if (promoted) user = promoted;
+    }
+
+    if (user.role !== 'owner') {
+      await ctx.reply('Sem permissão.');
+      return;
+    }
+
+    const summary = await this.deps.selfImprovement.analyzeAndPropose();
+    await ctx.reply(
+      'Auto-análise concluída.\n' +
+      `Sugestões: ${summary.suggestions.length}\n` +
+      `Propostas criadas: ${summary.createdProposals.length}`
+    );
   }
 
   private async handleTextMessage(ctx: Context): Promise<void> {

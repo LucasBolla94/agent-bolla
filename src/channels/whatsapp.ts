@@ -13,6 +13,7 @@ import { PersonalityService } from '../personality/service.js';
 import { ConversationsRepository, ConversationMessage } from '../database/repositories/conversations.js';
 import { UserRecord, UsersRepository } from '../database/repositories/users.js';
 import { PermissionService } from '../core/permissions.js';
+import { SelfImprovementService } from '../self-improvement/service.js';
 
 export interface WhatsAppChannelConfig {
   authDir: string;
@@ -24,6 +25,7 @@ export interface WhatsAppChannelDeps {
   rag: RagService;
   memory: MemoryService;
   personality: PersonalityService;
+  selfImprovement: SelfImprovementService;
   usersRepo: UsersRepository;
   conversationsRepo: ConversationsRepository;
   permissions: PermissionService;
@@ -205,7 +207,9 @@ export class WhatsAppBaileysChannel implements WhatsAppChannel {
           '!ping — latência\n' +
           '!aprender <fato> — ensinar algo novo\n' +
           '!personalidade ver — ver traits atuais\n' +
-          '!personalidade set <trait> <valor> — editar trait'
+          '!personalidade set <trait> <valor> — editar trait\n' +
+          '!code analyze — rodar ciclo de auto-melhoria\n' +
+          '!approval approve <id> | !approval reject <id>'
         );
       }
       return 'Comandos: !status, !ping, !help';
@@ -241,6 +245,30 @@ export class WhatsAppBaileysChannel implements WhatsAppChannel {
       }
 
       return 'Uso: !personalidade ver | !personalidade set <trait> <valor>';
+    }
+
+    if (cmd === '!code' && parts[1]?.toLowerCase() === 'analyze') {
+      const summary = await this.deps.selfImprovement.analyzeAndPropose();
+      return (
+        'Auto-análise concluída.\n' +
+        `Sugestões: ${summary.suggestions.length}\n` +
+        `Propostas criadas: ${summary.createdProposals.length}`
+      );
+    }
+
+    if (cmd === '!approval' && parts.length >= 3) {
+      const action = parts[1]?.toLowerCase();
+      const id = Number(parts[2]);
+
+      if (!Number.isFinite(id) || (action !== 'approve' && action !== 'reject')) {
+        return 'Uso: !approval approve <id> | !approval reject <id>';
+      }
+
+      const result = await this.deps.selfImprovement.handleApproval(
+        id,
+        action as 'approve' | 'reject'
+      );
+      return result;
     }
 
     return 'Comando não reconhecido. Use !help';
