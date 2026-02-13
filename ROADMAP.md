@@ -152,9 +152,9 @@ Bolla precisa ser cinco coisas:
 - [x] Registrar descobertas como `study_sessions` no banco
 
 ### 5.2 — Sistema de curiosidade
-- [ ] Lista de interesses que evolui com o que lê e discute
-- [ ] Tópicos com mais engajamento (nos tweets) ganham prioridade
-- [ ] O agent decide sozinho o que estudar com base em seus interesses atuais
+- [x] Lista de interesses que evolui com o que lê e discute
+- [x] Tópicos com mais engajamento (nos tweets) ganham prioridade
+- [x] O agent decide sozinho o que estudar com base em seus interesses atuais
 
 ### 5.3 — Formação e evolução de opinião
 - [ ] Ao estudar um tema: ler múltiplas perspectivas → sintetizar → formar opinião própria

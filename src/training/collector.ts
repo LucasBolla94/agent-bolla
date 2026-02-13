@@ -206,6 +206,34 @@ export class TrainingDataCollector {
       avgScore: total > 0 ? parseFloat((weightedSum / total).toFixed(2)) : 0
     };
   }
+
+  async getTopTwitterTopics(limit = 20): Promise<Array<{ topic: string; score: number }>> {
+    const result = await db.query<{ topic: string; score: string }>(
+      `SELECT
+         metadata->>'topic' AS topic,
+         (
+           COUNT(*)::numeric +
+           COALESCE(SUM((metadata->'tweetEngagement'->>'likes')::numeric), 0) * 0.10 +
+           COALESCE(SUM((metadata->'tweetEngagement'->>'retweets')::numeric), 0) * 0.25 +
+           COALESCE(SUM((metadata->'tweetEngagement'->>'replies')::numeric), 0) * 0.20
+         ) AS score
+       FROM training_data
+       WHERE source = 'twitter'
+         AND type = 'tweet_write'
+         AND metadata ? 'topic'
+       GROUP BY metadata->>'topic'
+       ORDER BY score DESC
+       LIMIT $1`,
+      [limit]
+    );
+
+    return result.rows
+      .map((row) => ({
+        topic: (row.topic || '').trim().toLowerCase(),
+        score: Number(row.score || '0')
+      }))
+      .filter((row) => row.topic.length > 0 && Number.isFinite(row.score));
+  }
 }
 
 export const collector = new TrainingDataCollector();

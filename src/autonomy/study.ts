@@ -1,4 +1,5 @@
 import { AiRouter } from '../ai/router.js';
+import { CuriosityEngine } from './curiosity.js';
 import { env } from '../config/env.js';
 import { StudySessionsRepository } from '../database/repositories/study-sessions.js';
 import { MemoryService } from '../memory/service.js';
@@ -11,6 +12,7 @@ export interface StudySchedulerDeps {
   memory: MemoryService;
   collector: TrainingDataCollector;
   studySessionsRepo: StudySessionsRepository;
+  curiosity?: CuriosityEngine;
 }
 
 interface StudyConfig {
@@ -72,7 +74,10 @@ export class StudyAutonomousScheduler {
         return;
       }
 
-      const topic = await this.chooseTopic(sources);
+      const fallbackTopic = await this.chooseTopic(sources);
+      const topic = this.deps.curiosity
+        ? await this.deps.curiosity.pickTopicForStudy(fallbackTopic)
+        : fallbackTopic;
       const findings = await this.summarizeTopic(topic, sources);
       const sourceUrls = Array.from(new Set(sources.map((item) => item.url).filter(Boolean) as string[])).slice(0, 20);
 
@@ -93,6 +98,14 @@ export class StudyAutonomousScheduler {
         sourceUrls,
         trainingDataGenerated: 1
       });
+
+      if (this.deps.curiosity) {
+        await this.deps.curiosity.absorbSignals([
+          topic,
+          findings,
+          ...sources.map((source) => source.text)
+        ]);
+      }
 
       console.log('[StudyScheduler] Study session completed.', { topic, sources: sources.length });
     } catch (error) {
