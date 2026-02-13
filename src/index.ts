@@ -5,7 +5,7 @@ import { db } from './database/connection.js';
 import { runMigrations } from './database/migrate.js';
 import { createMemoryService, createRagService } from './memory/index.js';
 import { createPersonalityService } from './personality/index.js';
-import { createTwitterPlatform } from './platforms/index.js';
+import { createTwitterAutonomousScheduler, createTwitterPlatform } from './platforms/index.js';
 import { collector } from './training/index.js';
 
 async function main(): Promise<void> {
@@ -73,8 +73,18 @@ async function main(): Promise<void> {
     await twitter.start();
     console.log(`Twitter platform initialized (enabled=${env.TWITTER_ENABLED}).`);
 
+    const twitterScheduler = createTwitterAutonomousScheduler({
+      twitter,
+      router,
+      collector,
+      memory,
+      personality
+    });
+    twitterScheduler.start();
+    console.log(`Twitter autonomous scheduler initialized (enabled=${env.TWITTER_AUTONOMOUS_ENABLED}).`);
+
     console.log('Agent Bolla initialized successfully!');
-    console.log('Phases 1.1 / 1.2 / 1.3 / 2.1 / 2.2 / 2.3 / 3.1 / 3.2 / 3.3 / 4.1 complete.');
+    console.log('Phases 1.1 / 1.2 / 1.3 / 2.1 / 2.2 / 2.3 / 3.1 / 3.2 / 3.3 / 4.1 / 4.2 complete.');
 
     // Expose for use in subsequent phases
     void router;
@@ -84,6 +94,7 @@ async function main(): Promise<void> {
     void whatsapp;
     void telegram;
     void twitter;
+    void twitterScheduler;
 
   } catch (error) {
     console.error('Error initializing agent:', error);

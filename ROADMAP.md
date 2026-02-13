@@ -127,12 +127,12 @@ Bolla precisa ser cinco coisas:
 - [x] Funções: ler timeline, postar, responder, curtir, retweet, quote, DMs, seguir
 
 ### 4.2 — Comportamento autônomo no X
-- [ ] Scheduler com variação aleatória (parecer humano):
+- [x] Scheduler com variação aleatória (parecer humano):
   - A cada 30min: ler timeline, absorver contexto
   - A cada 2-4h: postar sobre algo que aprendeu ou opinou
   - A cada 1h: verificar menções e responder
   - A cada 6h: interagir com tweets da comunidade tech
-- [ ] Anti-detecção: delays aleatórios, não postar de madrugada, scroll antes de interagir
+- [x] Anti-detecção: delays aleatórios, não postar de madrugada, scroll antes de interagir
 
 ### 4.3 — Geração de conteúdo autêntico
 - [ ] Pipeline de tweet: escolher tópico → gerar via Anthropic → revisar humanidade → postar

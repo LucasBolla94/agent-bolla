@@ -214,6 +214,32 @@ export class TwitterPlatform {
     return dms;
   }
 
+  async readMentions(limit = 20): Promise<TwitterTweet[]> {
+    const page = this.getPage();
+    await page.goto('https://x.com/notifications/mentions', { waitUntil: 'domcontentloaded' });
+    await this.waitForSelector('article[data-testid="tweet"]');
+    await this.autoScroll(1);
+
+    const tweets = await page.$$eval(
+      'article[data-testid="tweet"]',
+      (nodes, max) => nodes.slice(0, max).map((node) => {
+        const text = node.querySelector('[data-testid="tweetText"]')?.textContent?.trim() ?? '';
+        const author = node.querySelector('[data-testid="User-Name"]')?.textContent?.trim();
+        const timestamp = node.querySelector('time')?.getAttribute('datetime') ?? undefined;
+        const anchor = node.querySelector('a[href*="/status/"]') as { getAttribute(name: string): string | null } | null;
+        return {
+          text,
+          author,
+          timestamp,
+          url: anchor ? `https://x.com${anchor.getAttribute('href')}` : undefined
+        };
+      }).filter((tweet) => tweet.text.length > 0),
+      limit
+    );
+
+    return tweets;
+  }
+
   async follow(username: string): Promise<void> {
     const page = this.getPage();
     await page.goto(`https://x.com/${username}`, { waitUntil: 'domcontentloaded' });

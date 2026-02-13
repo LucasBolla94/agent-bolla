@@ -39,6 +39,7 @@ interface EnvConfig {
   TWITTER_USERNAME?: string;
   TWITTER_HEADLESS: string;
   TWITTER_COOKIES_PATH: string;
+  TWITTER_AUTONOMOUS_ENABLED: string;
 
   // Behavior
   STUDY_INTERVAL_MIN?: string;
@@ -95,6 +96,7 @@ export const env: EnvConfig = {
   TWITTER_USERNAME: getEnv('TWITTER_USERNAME', ''),
   TWITTER_HEADLESS: getEnv('TWITTER_HEADLESS', 'true'),
   TWITTER_COOKIES_PATH: getEnv('TWITTER_COOKIES_PATH', 'data/twitter/cookies.json'),
+  TWITTER_AUTONOMOUS_ENABLED: getEnv('TWITTER_AUTONOMOUS_ENABLED', 'false'),
 
   // Behavior
   STUDY_INTERVAL_MIN: getEnv('STUDY_INTERVAL_MIN', '30'),
