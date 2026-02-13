@@ -157,9 +157,9 @@ Bolla precisa ser cinco coisas:
 - [x] O agent decide sozinho o que estudar com base em seus interesses atuais
 
 ### 5.3 — Formação e evolução de opinião
-- [ ] Ao estudar um tema: ler múltiplas perspectivas → sintetizar → formar opinião própria
-- [ ] Salvar opiniões como memórias permanentes (categoria `opinion`)
-- [ ] Opiniões podem mudar com argumentos bons — isso é evolução, não inconsistência
+- [x] Ao estudar um tema: ler múltiplas perspectivas → sintetizar → formar opinião própria
+- [x] Salvar opiniões como memórias permanentes (categoria `opinion`)
+- [x] Opiniões podem mudar com argumentos bons — isso é evolução, não inconsistência
 
 **Entregável**: Agent que estuda, forma opiniões e evolui sua visão de mundo autonomamente.
 

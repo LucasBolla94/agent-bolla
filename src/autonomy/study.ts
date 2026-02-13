@@ -1,5 +1,6 @@
 import { AiRouter } from '../ai/router.js';
 import { CuriosityEngine } from './curiosity.js';
+import { OpinionEngine } from './opinion.js';
 import { env } from '../config/env.js';
 import { StudySessionsRepository } from '../database/repositories/study-sessions.js';
 import { MemoryService } from '../memory/service.js';
@@ -13,6 +14,7 @@ export interface StudySchedulerDeps {
   collector: TrainingDataCollector;
   studySessionsRepo: StudySessionsRepository;
   curiosity?: CuriosityEngine;
+  opinionEngine?: OpinionEngine;
 }
 
 interface StudyConfig {
@@ -105,6 +107,22 @@ export class StudyAutonomousScheduler {
           findings,
           ...sources.map((source) => source.text)
         ]);
+      }
+
+      if (this.deps.opinionEngine) {
+        const opinion = await this.deps.opinionEngine.formOrEvolve(
+          topic,
+          sources.map((source) => ({
+            text: source.text,
+            url: source.url,
+            source: source.source
+          }))
+        );
+
+        console.log('[StudyScheduler] Opinion formed/evolved.', {
+          topic: opinion.topic,
+          changedFromPrevious: opinion.changedFromPrevious
+        });
       }
 
       console.log('[StudyScheduler] Study session completed.', { topic, sources: sources.length });

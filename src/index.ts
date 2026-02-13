@@ -5,7 +5,7 @@ import { db } from './database/connection.js';
 import { runMigrations } from './database/migrate.js';
 import { createMemoryService, createRagService } from './memory/index.js';
 import { createPersonalityService } from './personality/index.js';
-import { CuriosityEngine, createStudyAutonomousScheduler } from './autonomy/index.js';
+import { CuriosityEngine, OpinionEngine, createStudyAutonomousScheduler } from './autonomy/index.js';
 import { StudySessionsRepository } from './database/repositories/study-sessions.js';
 import { createTwitterAutonomousScheduler, createTwitterPlatform } from './platforms/index.js';
 import { collector } from './training/index.js';
@@ -89,19 +89,23 @@ async function main(): Promise<void> {
     await curiosity.load();
     console.log('Curiosity engine initialized.');
 
+    const opinionEngine = new OpinionEngine(router, memory, collector, personality);
+    console.log('Opinion engine initialized.');
+
     const studyScheduler = createStudyAutonomousScheduler({
       router,
       twitter,
       memory,
       collector,
       studySessionsRepo: new StudySessionsRepository(),
-      curiosity
+      curiosity,
+      opinionEngine
     });
     studyScheduler.start();
     console.log(`Study autonomous scheduler initialized (enabled=${env.STUDY_AUTONOMOUS_ENABLED}).`);
 
     console.log('Agent Bolla initialized successfully!');
-    console.log('Phases 1.1 / 1.2 / 1.3 / 2.1 / 2.2 / 2.3 / 3.1 / 3.2 / 3.3 / 4.1 / 4.2 / 4.3 / 5.1 / 5.2 complete.');
+    console.log('Phases 1.1 / 1.2 / 1.3 / 2.1 / 2.2 / 2.3 / 3.1 / 3.2 / 3.3 / 4.1 / 4.2 / 4.3 / 5.1 / 5.2 / 5.3 complete.');
 
     // Expose for use in subsequent phases
     void router;
@@ -114,6 +118,7 @@ async function main(): Promise<void> {
     void twitterScheduler;
     void studyScheduler;
     void curiosity;
+    void opinionEngine;
 
   } catch (error) {
     console.error('Error initializing agent:', error);
