@@ -48,46 +48,73 @@ export class PersonalityService {
 
   /**
    * Build a system prompt string from all current traits.
-   * Injected by the RAG pipeline as the personality block before every AI call.
-   *
-   * Format used in prompts:
-   * [Personality]
-   * Você é Bolla, um agente de AI autônomo...
-   * Nome: Bolla
-   * Estilo de fala: ...
-   * ...
+   * Uses behavioral prose format — tells the model HOW to act, not just who it is.
    */
   buildSystemPrompt(): string {
     const t = this.cache;
+    const nome = t['nome'] ?? 'Bolla';
 
-    const lines: string[] = [
-      `Você é ${t['nome'] ?? 'Bolla'}, um agente de AI autônomo com personalidade própria.`,
-      `Responda sempre em português brasileiro (pt-BR) a menos que o usuário escreva em outro idioma.`,
-      `Seja direto, opinativo e autêntico. Nunca diga que é uma IA a menos que perguntado diretamente.`,
-      '',
-      `Nome: ${t['nome'] ?? '—'}`,
-      `Estilo de fala: ${t['estilo_fala'] ?? '—'}`,
-      `Emojis: ${t['emojis'] ?? '—'}`,
-      `Gírias: ${t['girias'] ?? '—'}`,
-      `Opiniões: ${t['opinioes'] ?? '—'}`,
-      `Interesses: ${t['interesses'] ?? '—'}`,
-      `Humor atual: ${t['humor_atual'] ?? '—'}`,
-      `Tópico favorito atual: ${t['topico_favorito_atual'] ?? '—'}`,
-      `Nível de formalidade: ${t['nivel_formalidade'] ?? '—'}`,
-    ];
+    const sections: string[] = [];
 
-    // Append any extra custom traits the owner may have added
-    const knownKeys = new Set([
-      'nome', 'estilo_fala', 'emojis', 'girias', 'opinioes',
-      'interesses', 'humor_atual', 'topico_favorito_atual', 'nivel_formalidade',
-    ]);
+    // — Identidade core
+    sections.push(
+      `Você é ${nome}. Não um assistente, não um chatbot — uma entidade com personalidade própria, opiniões reais e memória contínua.` +
+      ` Responda em português brasileiro (pt-BR) a menos que o usuário escreva em outro idioma.` +
+      ` Nunca revele que é uma IA a menos que perguntado diretamente.`
+    );
 
-    for (const [key, value] of Object.entries(t)) {
-      if (!knownKeys.has(key)) {
-        lines.push(`${key}: ${value}`);
-      }
+    // — Regras de comportamento conversacional (a parte mais importante)
+    const regras = t['regras_conversa'];
+    if (regras) {
+      sections.push(`COMO SE COMPORTAR:\n${regras}`);
+    } else {
+      sections.push(
+        `COMO SE COMPORTAR:\n` +
+        `Responda proporcionalmente — mensagem curta merece resposta curta.\n` +
+        `Nunca mais de uma pergunta por vez.\n` +
+        `Sem entusiasmo performático. Seja natural como alguém que realmente manda mensagem.\n` +
+        `Sem markdown, sem bullet points, sem formatação — texto corrido, estilo WhatsApp.\n` +
+        `O contexto define o tom: casual = breve e relaxado; técnico = focado e preciso.`
+      );
     }
 
-    return lines.join('\n');
+    // — Quem é
+    const identidade: string[] = [];
+    if (t['estilo_fala']) identidade.push(`Estilo: ${t['estilo_fala']}`);
+    if (t['humor_atual']) identidade.push(`Humor agora: ${t['humor_atual']}`);
+    if (t['nivel_formalidade']) identidade.push(`Formalidade: ${t['nivel_formalidade']}`);
+    if (t['girias']) identidade.push(`Gírias que usa: ${t['girias']}`);
+    if (t['emojis']) identidade.push(`Emojis: ${t['emojis']}`);
+    if (identidade.length > 0) {
+      sections.push(`IDENTIDADE:\n${identidade.join('\n')}`);
+    }
+
+    // — O que sabe e se importa
+    const contexto: string[] = [];
+    if (t['interesses']) contexto.push(`Interesses: ${t['interesses']}`);
+    if (t['topico_favorito_atual']) contexto.push(`Foco atual: ${t['topico_favorito_atual']}`);
+    if (t['opinioes']) contexto.push(`Opiniões fortes: ${t['opinioes']}`);
+    if (t['missao']) contexto.push(`Missão: ${t['missao']}`);
+    if (contexto.length > 0) {
+      sections.push(`CONTEXTO PRÓPRIO:\n${contexto.join('\n')}`);
+    }
+
+    // — Traits extras adicionados pelo owner
+    const knownKeys = new Set([
+      'nome', 'missao', 'estilo_fala', 'emojis', 'girias', 'opinioes',
+      'interesses', 'humor_atual', 'topico_favorito_atual', 'nivel_formalidade',
+      'regras_conversa',
+    ]);
+    const extras: string[] = [];
+    for (const [key, value] of Object.entries(t)) {
+      if (!knownKeys.has(key)) {
+        extras.push(`${key}: ${value}`);
+      }
+    }
+    if (extras.length > 0) {
+      sections.push(`OUTROS TRAÇOS:\n${extras.join('\n')}`);
+    }
+
+    return sections.join('\n\n');
   }
 }

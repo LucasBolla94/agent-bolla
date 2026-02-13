@@ -137,7 +137,9 @@ export class RagService {
       `[Memories]\n${memoriesBlock}`,
       `[ShortTerm]\n${shortTermBlock}`,
       `[UserMessage]\n${input.message}`,
-      'Respond naturally and use the relevant memories only when helpful.'
+      'Responda de forma natural e humana. Use as memórias apenas se forem realmente relevantes para esta mensagem específica. ' +
+      'Se a mensagem for curta ou casual (saudação, pergunta simples), responda de forma igualmente curta e direta — não elabore desnecessariamente. ' +
+      'Nunca inicie com frases genéricas como "Olá!", "Claro!", "Com certeza!" ou entusiasmo exagerado. Vá direto ao ponto.'
     ].join('\n\n');
   }
 

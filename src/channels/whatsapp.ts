@@ -6,7 +6,7 @@ import makeWASocket, {
   WAMessage,
   WASocket
 } from '@whiskeysockets/baileys';
-import qrcode from 'qrcode-terminal';
+import QRCode from 'qrcode';
 import { RagService } from '../memory/rag.js';
 import { MemoryService } from '../memory/service.js';
 import { PersonalityService } from '../personality/service.js';
@@ -74,6 +74,98 @@ export class WhatsAppBaileysChannel implements WhatsAppChannel {
     return this.connected && Boolean(this.sock);
   }
 
+  private async renderQRCode(text: string): Promise<void> {
+    try {
+      // Detecta se está em ambiente SSH/remoto
+      const isSSH = Boolean(process.env.SSH_CONNECTION || process.env.SSH_CLIENT || process.env.SSH_TTY);
+      const term = process.env.TERM || '';
+      const isLimitedTerminal = term.includes('xterm') || term.includes('screen') || term.includes('vt100');
+
+      // IMPORTANTE: Usar process.stdout.write() ao invés de console.log()
+      // para evitar que o logger estruturado (pino) escape os \n
+
+      // Se for SSH ou terminal limitado, mostra header
+      if (isSSH || isLimitedTerminal) {
+        process.stdout.write('\n╔═══════════════════════════════════════════════════════╗\n');
+        process.stdout.write('║  📱 WHATSAPP QR CODE - Scan with your phone          ║\n');
+        process.stdout.write('╚═══════════════════════════════════════════════════════╝\n\n');
+      }
+
+      // Gera QR code como matriz de dados
+      const qrMatrix = await QRCode.create(text, {
+        errorCorrectionLevel: 'L'
+      });
+
+      const modules = qrMatrix.modules;
+      const size = modules.size;
+      const data = modules.data;
+
+      // Adiciona borda branca
+      const border = 2;
+      let qrString = '';
+
+      // Usa caracteres diferentes dependendo do ambiente
+      const darkPixel = (isSSH || isLimitedTerminal) ? '  ' : '  ';
+      const lightPixel = (isSSH || isLimitedTerminal) ? '██' : '██';
+
+      // Linha superior da borda
+      for (let i = 0; i < size + border * 2; i++) {
+        qrString += lightPixel;
+      }
+      qrString += '\n';
+
+      // Renderiza o QR code com borda
+      for (let y = 0; y < size; y++) {
+        // Borda esquerda
+        for (let i = 0; i < border; i++) {
+          qrString += lightPixel;
+        }
+
+        // Conteúdo do QR code
+        for (let x = 0; x < size; x++) {
+          const isDark = data[y * size + x];
+          qrString += isDark ? darkPixel : lightPixel;
+        }
+
+        // Borda direita
+        for (let i = 0; i < border; i++) {
+          qrString += lightPixel;
+        }
+        qrString += '\n';
+      }
+
+      // Linha inferior da borda
+      for (let i = 0; i < size + border * 2; i++) {
+        qrString += lightPixel;
+      }
+      qrString += '\n';
+
+      // Imprime o QR code diretamente no stdout (sem passar pelo logger)
+      process.stdout.write(qrString);
+
+      // Adiciona instrução extra para SSH
+      if (isSSH || isLimitedTerminal) {
+        process.stdout.write('\n╔═══════════════════════════════════════════════════════╗\n');
+        process.stdout.write('║  DICA: Se o QR code não estiver legível:             ║\n');
+        process.stdout.write('║  1. Aumente o tamanho da fonte do terminal            ║\n');
+        process.stdout.write('║  2. Dê zoom out na janela do terminal                 ║\n');
+        process.stdout.write('║  3. Use cliente SSH melhor (Windows Terminal, iTerm2) ║\n');
+        process.stdout.write('╚═══════════════════════════════════════════════════════╝\n\n');
+      }
+
+      process.stdout.write('\n[WhatsApp] Escaneie o QR code acima com o WhatsApp.\n\n');
+    } catch (error) {
+      console.error('[WhatsApp] Erro ao gerar QR code:', error);
+      // Fallback: imprime o texto do QR
+      process.stdout.write('\n❌ Falha ao renderizar QR code. Texto do QR:\n');
+      process.stdout.write('─'.repeat(60) + '\n');
+      process.stdout.write(text + '\n');
+      process.stdout.write('─'.repeat(60) + '\n');
+      process.stdout.write('\nGere o QR code em: https://www.qr-code-generator.com/\n');
+      process.stdout.write('Cole o texto acima para gerar um QR code escaneável.\n\n');
+    }
+  }
+
   private async connect(): Promise<void> {
     if (this.connecting) return;
     this.connecting = true;
@@ -96,8 +188,9 @@ export class WhatsAppBaileysChannel implements WhatsAppChannel {
         const { connection, lastDisconnect, qr } = update;
 
         if (qr) {
-          qrcode.generate(qr, { small: true });
-          console.log('[WhatsApp] QR code generated. Scan it with WhatsApp.');
+          console.log('\n[WhatsApp] QR Code para conectar:\n');
+          await this.renderQRCode(qr);
+          console.log('\n[WhatsApp] Escaneie o QR code acima com o WhatsApp.\n');
         }
 
         if (connection === 'open') {

@@ -1,0 +1,512 @@
+#!/bin/bash
+#
+# ╔═══════════════════════════════════════════════════════════════╗
+# ║              BOLLA — Agent Management CLI                    ║
+# ║  Usage: bolla <command> [options]                            ║
+# ╚═══════════════════════════════════════════════════════════════╝
+
+# ── Colors ─────────────────────────────────────────────────────
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+DIM='\033[2m'
+NC='\033[0m'
+
+# ── Paths ───────────────────────────────────────────────────────
+# Resolve symlinks para sempre apontar ao diretório real do projeto
+REAL_SCRIPT="$(readlink -f "${BASH_SOURCE[0]}")"
+SCRIPT_DIR="$(cd "$(dirname "$REAL_SCRIPT")" && pwd)"
+AUTH_DIR="${WHATSAPP_AUTH_DIR:-$SCRIPT_DIR/data/whatsapp-auth}"
+LOGS_DIR="$SCRIPT_DIR/logs"
+DIST_ENTRY="$SCRIPT_DIR/dist/index.js"
+PM2_APP="agent-bolla"
+QR_TIMEOUT=120
+
+# ── Helpers ─────────────────────────────────────────────────────
+log_step()  { echo -e "${BLUE}▸${NC} $*"; }
+log_ok()    { echo -e "${GREEN}✓${NC} $*"; }
+log_warn()  { echo -e "${YELLOW}!${NC} $*"; }
+log_err()   { echo -e "${RED}✗${NC} $*" >&2; }
+log_dim()   { echo -e "${DIM}  $*${NC}"; }
+
+require_dir() {
+  if [ ! -d "$SCRIPT_DIR" ]; then
+    log_err "Diretório do projeto não encontrado: $SCRIPT_DIR"
+    exit 1
+  fi
+  cd "$SCRIPT_DIR"
+}
+
+require_env() {
+  if [ ! -f "$SCRIPT_DIR/.env" ]; then
+    log_err ".env não encontrado. Configure antes de continuar."
+    exit 1
+  fi
+}
+
+require_node() {
+  if ! command -v node &>/dev/null; then
+    log_err "Node.js não encontrado. Instale v20+."
+    exit 1
+  fi
+  local ver
+  ver=$(node -v | sed 's/v//' | cut -d. -f1)
+  if [ "$ver" -lt 20 ]; then
+    log_err "Node.js v$ver detectado. Requer v20+."
+    exit 1
+  fi
+}
+
+require_pm2() {
+  # Garante que o node resolvido pelo env não seja o snap (que tem sandbox e quebra PM2)
+  local REAL_NODE
+  REAL_NODE="$(readlink -f "$(command -v node)")"
+  if echo "$REAL_NODE" | grep -q "/snap/"; then
+    if [ -x "/usr/bin/node" ]; then
+      log_warn "node snap detectado — redirecionando /usr/local/bin/node → /usr/bin/node"
+      ln -sf /usr/bin/node /usr/local/bin/node
+    fi
+  fi
+
+  if ! command -v pm2 &>/dev/null; then
+    log_warn "PM2 não encontrado. Instalando..."
+    npm install -g pm2@5 --loglevel=error
+    log_ok "PM2 instalado"
+  fi
+}
+
+is_authenticated() {
+  [ -f "$AUTH_DIR/creds.json" ]
+}
+
+pm2_status() {
+  pm2 jlist 2>/dev/null | \
+    node -e "
+      let d='';
+      process.stdin.on('data',c=>d+=c);
+      process.stdin.on('end',()=>{
+        try {
+          const list=JSON.parse(d);
+          const app=list.find(a=>a.name==='$PM2_APP');
+          if(app) process.stdout.write(app.pm2_env.status);
+          else process.stdout.write('stopped');
+        } catch(e){ process.stdout.write('unknown'); }
+      });
+    " 2>/dev/null || echo "unknown"
+}
+
+is_running() {
+  local s
+  s=$(pm2_status)
+  [ "$s" = "online" ]
+}
+
+# ── CMD: help ───────────────────────────────────────────────────
+cmd_help() {
+  echo ""
+  echo -e "${CYAN}${BOLD}  BOLLA — Agent Management CLI${NC}"
+  echo -e "${DIM}  Agent Autônomo — AI com Vontade Própria${NC}"
+  echo ""
+  echo -e "${BOLD}  Uso:${NC}"
+  echo -e "    bolla <comando> [opções]"
+  echo ""
+  echo -e "${BOLD}  Comandos:${NC}"
+  echo -e "    ${GREEN}start${NC}              Inicia o agent (build + QR se necessário + background)"
+  echo -e "    ${GREEN}stop${NC}               Para o agent"
+  echo -e "    ${GREEN}restart${NC}            Reinicia o agent (rebuild automático)"
+  echo -e "    ${GREEN}status${NC}             Exibe status do agent"
+  echo -e "    ${GREEN}logs${NC}  [-n N]       Acompanha os logs em tempo real"
+  echo -e "    ${GREEN}qr${NC}                 Exibe QR code para reconectar WhatsApp"
+  echo -e "    ${GREEN}build${NC}              Compila o TypeScript"
+  echo -e "    ${GREEN}install${NC}            Instala 'bolla' globalmente (${DIM}/usr/local/bin${NC})"
+  echo ""
+  echo -e "${BOLD}  Exemplos:${NC}"
+  echo -e "    ${DIM}bolla start${NC}"
+  echo -e "    ${DIM}bolla restart${NC}"
+  echo -e "    ${DIM}bolla logs -n 50${NC}"
+  echo -e "    ${DIM}bolla status${NC}"
+  echo ""
+}
+
+# ── CMD: build ──────────────────────────────────────────────────
+cmd_build() {
+  require_dir
+  require_node
+
+  log_step "Verificando dependências..."
+  if [ ! -d "$SCRIPT_DIR/node_modules" ]; then
+    log_step "Instalando dependências npm..."
+    npm install --loglevel=error
+    log_ok "Dependências instaladas"
+  else
+    log_ok "node_modules presente"
+  fi
+
+  log_step "Compilando TypeScript..."
+  if npm run build 2>&1; then
+    log_ok "Build concluído → dist/"
+  else
+    log_err "Build falhou"
+    exit 1
+  fi
+}
+
+# ── QR Code flow ─────────────────────────────────────────────────
+# Roda o agent em foreground para exibir o QR, detecta conexão
+# e automaticamente encerra o foreground ao conectar.
+_run_qr_and_wait() {
+  local TEMP_LOG
+  TEMP_LOG=$(mktemp /tmp/bolla-qr-XXXX.log)
+
+  echo ""
+  echo -e "${CYAN}╔═══════════════════════════════════════════════════════════════╗${NC}"
+  echo -e "${CYAN}║  📱  ESCANEIE O QR CODE COM SEU WHATSAPP                     ║${NC}"
+  echo -e "${CYAN}║      Após escanear, aguarde — o agent vai ao background       ║${NC}"
+  echo -e "${CYAN}║      automaticamente. (Ctrl+C também funciona após escanear)  ║${NC}"
+  echo -e "${CYAN}╚═══════════════════════════════════════════════════════════════╝${NC}"
+  echo ""
+
+  # Inicia node em background com process substitution (tee mostra no terminal E grava no log)
+  # IMPORTANTE: usar > >(tee) em vez de | tee para que $! seja o PID do node, não do tee
+  node "$DIST_ENTRY" > >(tee "$TEMP_LOG") 2>&1 &
+  local NODE_PID=$!
+
+  local CONNECTED=false
+  local ELAPSED=0
+
+  # Handler para Ctrl+C: assume que o usuário escaneou e quer ir ao background
+  trap '_qr_ctrlc' INT
+
+  _qr_ctrlc() {
+    echo ""
+    echo -e "${YELLOW}Ctrl+C detectado — indo para background...${NC}"
+    CONNECTED=true
+    kill "$NODE_PID" 2>/dev/null || true
+    pkill -P "$NODE_PID" 2>/dev/null || true
+  }
+
+  while [ $ELAPSED -lt $QR_TIMEOUT ]; do
+    # Verifica se o processo ainda vive
+    if ! kill -0 "$NODE_PID" 2>/dev/null; then
+      break
+    fi
+
+    # Detecta conexão via log (case-insensitive; o log real é "[WhatsApp] Connected.")
+    if grep -qiE '\[WhatsApp\] Connected|WhatsApp.*conectado|connection.*open|Bolla.*online' "$TEMP_LOG" 2>/dev/null; then
+      CONNECTED=true
+      kill "$NODE_PID" 2>/dev/null || true
+      break
+    fi
+
+    sleep 1
+    ELAPSED=$((ELAPSED + 1))
+  done
+
+  # Remove trap
+  trap - INT
+
+  # Mata o node e qualquer filho direto (o tee da process substitution)
+  kill "$NODE_PID" 2>/dev/null || true
+  pkill -P "$NODE_PID" 2>/dev/null || true
+  # Garante que nenhum processo node dist/index.js ficou orphan
+  pkill -f "node.*dist/index.js" 2>/dev/null || true
+  wait "$NODE_PID" 2>/dev/null || true
+  sleep 1
+  rm -f "$TEMP_LOG"
+
+  if [ "$CONNECTED" = true ]; then
+    echo ""
+    echo -e "${GREEN}✓ WhatsApp conectado!${NC}"
+    sleep 1
+  else
+    echo ""
+    echo -e "${YELLOW}! Timeout de ${QR_TIMEOUT}s — tentando iniciar em background mesmo assim...${NC}"
+  fi
+}
+
+# ── CMD: start ──────────────────────────────────────────────────
+cmd_start() {
+  require_dir
+  require_node
+  require_env
+  require_pm2
+
+  echo ""
+  echo -e "${CYAN}${BOLD}  BOLLA — Iniciando Agent${NC}"
+  echo ""
+
+  # 1. Dependências + build
+  if [ ! -d "$SCRIPT_DIR/node_modules" ]; then
+    log_step "Instalando dependências..."
+    npm install --loglevel=error
+    log_ok "Dependências instaladas"
+  fi
+
+  if [ ! -f "$DIST_ENTRY" ] || [ "$SCRIPT_DIR/src" -nt "$DIST_ENTRY" ]; then
+    log_step "Compilando TypeScript..."
+    if ! npm run build > /dev/null 2>&1; then
+      log_err "Build falhou. Execute: bolla build"
+      exit 1
+    fi
+    log_ok "Build concluído"
+  else
+    log_ok "Build atualizado"
+  fi
+
+  # 2. Para instâncias existentes
+  log_step "Parando instâncias existentes..."
+  pm2 delete "$PM2_APP" 2>/dev/null || true
+  pkill -9 -f "node.*dist/index.js" 2>/dev/null || true
+  sleep 1
+  log_ok "Instâncias antigas removidas"
+
+  # 3. QR Code (se necessário)
+  mkdir -p "$LOGS_DIR"
+
+  if is_authenticated; then
+    log_ok "Sessão WhatsApp existente — pulando QR code"
+  else
+    log_step "Sessão WhatsApp não encontrada — exibindo QR code..."
+    _run_qr_and_wait
+  fi
+
+  # 4. Inicia em background com PM2
+  log_step "Iniciando em modo 24/7 com PM2..."
+  pm2 start "$SCRIPT_DIR/ecosystem.config.cjs" > /dev/null 2>&1
+  pm2 save > /dev/null 2>&1
+  sleep 3
+
+  local STATUS
+  STATUS=$(pm2_status)
+
+  if [ "$STATUS" = "online" ]; then
+    log_ok "Agent rodando em background (PM2)"
+  else
+    log_warn "Status PM2: $STATUS (pode levar alguns segundos)"
+  fi
+
+  _print_status_box
+}
+
+# ── CMD: stop ───────────────────────────────────────────────────
+cmd_stop() {
+  require_pm2
+
+  log_step "Parando $PM2_APP..."
+  if pm2 stop "$PM2_APP" 2>/dev/null; then
+    pm2 delete "$PM2_APP" 2>/dev/null || true
+    log_ok "Agent parado"
+  else
+    log_warn "Agent não estava rodando"
+  fi
+  pkill -f "node.*dist/index.js" 2>/dev/null || true
+}
+
+# ── CMD: restart ────────────────────────────────────────────────
+cmd_restart() {
+  require_dir
+  require_node
+  require_pm2
+
+  log_step "Reconstruindo projeto..."
+  if ! npm run build > /dev/null 2>&1; then
+    log_err "Build falhou. Abortando restart."
+    exit 1
+  fi
+  log_ok "Build concluído"
+
+  if is_running; then
+    log_step "Reiniciando via PM2..."
+    pm2 restart "$PM2_APP" > /dev/null 2>&1
+    sleep 2
+    log_ok "Agent reiniciado"
+  else
+    log_step "Agent não estava rodando — iniciando..."
+    cmd_start
+    return
+  fi
+
+  _print_status_box
+}
+
+# ── CMD: status ─────────────────────────────────────────────────
+cmd_status() {
+  require_pm2
+
+  local STATUS
+  STATUS=$(pm2_status)
+
+  echo ""
+  echo -e "${BOLD}  Agent Bolla — Status${NC}"
+  echo ""
+
+  case "$STATUS" in
+    online)
+      echo -e "  Estado:    ${GREEN}${BOLD}● online${NC}"
+      ;;
+    stopped|stopping)
+      echo -e "  Estado:    ${YELLOW}○ parado${NC}"
+      ;;
+    errored)
+      echo -e "  Estado:    ${RED}✗ erro${NC}"
+      ;;
+    *)
+      echo -e "  Estado:    ${DIM}$STATUS${NC}"
+      ;;
+  esac
+
+  # Auth
+  if is_authenticated; then
+    echo -e "  WhatsApp:  ${GREEN}autenticado${NC}"
+  else
+    echo -e "  WhatsApp:  ${YELLOW}sem sessão${NC} ${DIM}(execute: bolla qr)${NC}"
+  fi
+
+  echo ""
+
+  # PM2 info resumida
+  pm2 jlist 2>/dev/null | \
+    node -e "
+      let d='';
+      process.stdin.on('data',c=>d+=c);
+      process.stdin.on('end',()=>{
+        try {
+          const list=JSON.parse(d);
+          const app=list.find(a=>a.name==='$PM2_APP');
+          if(!app){ return; }
+          const e=app.pm2_env;
+          const mem=app.monit && app.monit.memory
+            ? (app.monit.memory/1024/1024).toFixed(1)+' MB' : '-';
+          const cpu=app.monit ? app.monit.cpu+'%' : '-';
+          const uptime=e.pm_uptime
+            ? (() => {
+                const s=Math.floor((Date.now()-e.pm_uptime)/1000);
+                if(s<60) return s+'s';
+                if(s<3600) return Math.floor(s/60)+'m';
+                return Math.floor(s/3600)+'h '+Math.floor((s%3600)/60)+'m';
+              })() : '-';
+          console.log('  PID:       '+e.pid);
+          console.log('  Uptime:    '+uptime);
+          console.log('  CPU:       '+cpu);
+          console.log('  Memória:   '+mem);
+          console.log('  Restarts:  '+e.restart_time);
+        } catch(e){}
+      });
+    " 2>/dev/null
+
+  echo ""
+}
+
+# ── CMD: logs ───────────────────────────────────────────────────
+cmd_logs() {
+  require_pm2
+
+  local LINES=50
+  # Parse -n N
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -n|--lines) LINES="$2"; shift 2 ;;
+      *) shift ;;
+    esac
+  done
+
+  if ! is_running && ! pm2 describe "$PM2_APP" &>/dev/null; then
+    log_warn "Agent não está rodando. Exibindo últimas linhas dos logs salvos:"
+    if [ -f "$LOGS_DIR/combined.log" ]; then
+      tail -n "$LINES" "$LOGS_DIR/combined.log"
+    else
+      log_dim "Nenhum log encontrado em $LOGS_DIR/"
+    fi
+    return
+  fi
+
+  echo -e "${DIM}  Exibindo logs (Ctrl+C para sair)...${NC}"
+  echo ""
+  pm2 logs "$PM2_APP" --lines "$LINES"
+}
+
+# ── CMD: qr ─────────────────────────────────────────────────────
+cmd_qr() {
+  require_dir
+  require_node
+  require_pm2
+
+  log_step "Parando agent temporariamente para exibir QR..."
+  pm2 stop "$PM2_APP" 2>/dev/null || true
+  sleep 2
+
+  _run_qr_and_wait
+
+  log_step "Reiniciando agent em background..."
+  if pm2 describe "$PM2_APP" &>/dev/null; then
+    pm2 restart "$PM2_APP" > /dev/null 2>&1
+  else
+    pm2 start "$SCRIPT_DIR/ecosystem.config.cjs" > /dev/null 2>&1
+  fi
+  pm2 save > /dev/null 2>&1
+  sleep 2
+
+  log_ok "Agent voltou ao background"
+  _print_status_box
+}
+
+# ── CMD: install ─────────────────────────────────────────────────
+cmd_install() {
+  local TARGET="/usr/local/bin/bolla"
+
+  log_step "Instalando bolla em $TARGET..."
+
+  if ln -sf "$SCRIPT_DIR/bolla" "$TARGET" 2>/dev/null; then
+    log_ok "Instalado! Agora você pode usar 'bolla' de qualquer diretório."
+  else
+    log_err "Sem permissão. Tente: sudo bolla install"
+    exit 1
+  fi
+}
+
+# ── Status box (final) ───────────────────────────────────────────
+_print_status_box() {
+  local STATUS
+  STATUS=$(pm2_status)
+
+  echo ""
+  echo -e "${CYAN}╔═══════════════════════════════════════════════════════════════╗${NC}"
+  if [ "$STATUS" = "online" ]; then
+    echo -e "${CYAN}║${NC}  ${GREEN}${BOLD}✨ Agent Bolla está online e rodando em background${NC}${CYAN}        ║${NC}"
+  else
+    echo -e "${CYAN}║${NC}  ${YELLOW}Agent Bolla iniciado — status: $STATUS${NC}${CYAN}                   ║${NC}"
+  fi
+  echo -e "${CYAN}╠═══════════════════════════════════════════════════════════════╣${NC}"
+  echo -e "${CYAN}║${NC}  ${BOLD}bolla logs${NC}        → acompanhar logs em tempo real           ${CYAN}║${NC}"
+  echo -e "${CYAN}║${NC}  ${BOLD}bolla status${NC}      → ver status do agent                     ${CYAN}║${NC}"
+  echo -e "${CYAN}║${NC}  ${BOLD}bolla restart${NC}     → rebuild e reiniciar                     ${CYAN}║${NC}"
+  echo -e "${CYAN}║${NC}  ${BOLD}bolla stop${NC}        → parar o agent                           ${CYAN}║${NC}"
+  echo -e "${CYAN}║${NC}  ${BOLD}bolla qr${NC}          → escanear QR code novamente               ${CYAN}║${NC}"
+  echo -e "${CYAN}╚═══════════════════════════════════════════════════════════════╝${NC}"
+  echo ""
+}
+
+# ── Dispatcher ───────────────────────────────────────────────────
+COMMAND="${1:-help}"
+shift 2>/dev/null || true
+
+case "$COMMAND" in
+  start)      cmd_start    "$@" ;;
+  stop)       cmd_stop     "$@" ;;
+  restart)    cmd_restart  "$@" ;;
+  status)     cmd_status   "$@" ;;
+  logs)       cmd_logs     "$@" ;;
+  qr)         cmd_qr       "$@" ;;
+  build)      cmd_build    "$@" ;;
+  install)    cmd_install  "$@" ;;
+  help|--help|-h) cmd_help ;;
+  *)
+    log_err "Comando desconhecido: '$COMMAND'"
+    echo ""
+    cmd_help
+    exit 1
+    ;;
+esac

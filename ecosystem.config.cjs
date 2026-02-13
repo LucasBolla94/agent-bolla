@@ -2,6 +2,7 @@ module.exports = {
   apps: [{
     name: 'agent-bolla',
     script: './dist/index.js',
+    cwd: '/root/agent-bolla',
     instances: 1,
     exec_mode: 'fork',
     autorestart: true,
@@ -10,27 +11,17 @@ module.exports = {
     env: {
       NODE_ENV: 'production'
     },
-    error_file: './logs/err.log',
-    out_file: './logs/out.log',
-    log_file: './logs/combined.log',
+    error_file: '/root/agent-bolla/logs/err.log',
+    out_file: '/root/agent-bolla/logs/out.log',
+    log_file: '/root/agent-bolla/logs/combined.log',
     time: true,
     merge_logs: true,
     log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
 
     // Restart configuration
-    min_uptime: '10s',
+    min_uptime: '5s',
     max_restarts: 10,
     restart_delay: 4000,
-
-    // Advanced features
     kill_timeout: 5000,
-    listen_timeout: 3000,
-    shutdown_with_message: true,
-
-    // Monitoring
-    instance_var: 'INSTANCE_ID',
-
-    // Environment variables can be loaded from .env file
-    // PM2 will automatically load from .env in the same directory
   }]
 };
