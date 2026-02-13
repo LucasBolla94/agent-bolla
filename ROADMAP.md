@@ -5,14 +5,14 @@
 
 ---
 
-## Fase 0 — Fundação (Semana 1)
+## Fase 0 — Fundação (Semana 1) ✅ CONCLUÍDA
 > Setup do projeto, banco de dados, configurações base.
 
-- [ ] Inicializar projeto Node.js + TypeScript
-- [ ] Configurar ESLint, tsconfig, scripts de build
-- [ ] Configurar PM2 (ecosystem.config.js)
-- [ ] Setup PostgreSQL no VPS
-- [ ] Criar schema do banco:
+- [x] Inicializar projeto Node.js + TypeScript
+- [x] Configurar ESLint, tsconfig, scripts de build
+- [x] Configurar PM2 (ecosystem.config.cjs)
+- [x] Setup PostgreSQL no VPS
+- [x] Criar schema do banco:
   - Tabela `users` (id, phone, telegram_id, role: owner/user, name, created_at)
   - Tabela `conversations` (id, user_id, channel, messages JSONB, created_at)
   - Tabela `memories` (id, content, embedding_text, category, source, created_at)
@@ -21,9 +21,9 @@
   - Tabela `tweets` (id, content, type: post/reply/quote, engagement JSONB, created_at)
   - Tabela `study_sessions` (id, topic, findings, source_urls, training_data_generated, created_at)
   - Tabela `code_improvements` (id, file, description, diff, status: pending/approved/rejected, created_at)
-- [ ] Criar sistema de migrations
-- [ ] Configurar variáveis de ambiente (.env)
-- [ ] Criar cliente de conexão com PostgreSQL (usando `pg` ou `postgres.js`)
+- [x] Criar sistema de migrations
+- [x] Configurar variáveis de ambiente (.env)
+- [x] Criar cliente de conexão com PostgreSQL (usando `pg` ou `postgres.js`)
 
 **Entregável**: Projeto rodando no VPS com banco conectado.
 
