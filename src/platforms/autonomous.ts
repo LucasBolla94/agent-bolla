@@ -26,6 +26,16 @@ interface TwitterAutonomousDeps {
   personality: PersonalityService;
 }
 
+type ContentKind = 'opinion' | 'discovery' | 'question' | 'thread' | 'contextual_reply';
+
+interface ContentDraft {
+  kind: ContentKind;
+  topic: string;
+  prompt: string;
+  text: string;
+  threadParts?: string[];
+}
+
 const TECH_KEYWORDS = [
   'typescript',
   'javascript',
@@ -72,7 +82,7 @@ export class TwitterAutonomousScheduler {
     console.log('[TwitterScheduler] Starting autonomous routines.');
 
     this.scheduleLoop('timeline', this.config.timeline, () => this.collectTimeline(), true);
-    this.scheduleLoop('post', this.config.post, () => this.postOriginalTweet(), false);
+    this.scheduleLoop('post', this.config.post, () => this.publishContent(), false);
     this.scheduleLoop('mentions', this.config.mentions, () => this.replyToMentions(), true);
     this.scheduleLoop('community', this.config.community, () => this.communityInteraction(), false);
   }
@@ -144,7 +154,8 @@ export class TwitterAutonomousScheduler {
         metadata: {
           author: tweet.author,
           timestamp: tweet.timestamp,
-          tweetUrl: tweet.url
+          tweetUrl: tweet.url,
+          kind: 'timeline_context'
         }
       });
     }
@@ -152,43 +163,47 @@ export class TwitterAutonomousScheduler {
     console.log(`[TwitterScheduler] collected ${interesting.length} timeline tweets for training data.`);
   }
 
-  private async postOriginalTweet(): Promise<void> {
+  private async publishContent(): Promise<void> {
     if (this.isQuietHours()) {
       console.log('[TwitterScheduler] post skipped (quiet hours 03:00-06:00).');
       return;
     }
 
     const topic = await this.pickTopicForPost();
-    const styleHint = this.pickRandom([
-      'opinião curta e direta',
-      'descoberta técnica prática',
-      'pergunta para a comunidade'
-    ]);
+    const kind = this.pickRandom<ContentKind>(['opinion', 'discovery', 'question', 'thread']);
 
-    const prompt = [
-      'Crie um tweet em português brasileiro com tom humano e natural.',
-      `Tópico: ${topic}`,
-      `Estilo desejado: ${styleHint}`,
-      'Regras: máximo 260 caracteres, sem hashtags em excesso, sem parecer bot.'
-    ].join('\n');
-
-    const result = await this.deps.router.route({
-      prompt,
-      complexity: 'medium'
-    });
-
-    const tweet = this.trimTweet(result.text);
+    const draft = await this.generateDraft(kind, topic);
+    const reviewed = await this.reviewAndRefineDraft(draft);
 
     await this.randomActionDelay();
+
+    if (reviewed.kind === 'thread' && reviewed.threadParts && reviewed.threadParts.length > 1) {
+      await this.deps.twitter.postThread(reviewed.threadParts);
+      for (const part of reviewed.threadParts) {
+        await this.deps.collector.saveTweet(part, 'post', {
+          contentKind: 'thread',
+          topic,
+          reviewApproved: true,
+          generatedPrompt: reviewed.prompt
+        });
+      }
+      await this.deps.memory.remember(`Posted thread about ${topic}: ${reviewed.threadParts.join(' | ')}`, 'twitter', 'opinion');
+      console.log('[TwitterScheduler] thread posted.', { parts: reviewed.threadParts.length });
+      return;
+    }
+
+    const tweet = this.trimTweet(reviewed.text);
     await this.deps.twitter.postTweet(tweet);
 
     await this.deps.collector.saveTweet(tweet, 'post', {
-      channel: 'twitter',
-      topic
+      contentKind: reviewed.kind,
+      topic,
+      reviewApproved: true,
+      generatedPrompt: reviewed.prompt
     });
 
-    await this.deps.memory.remember(`Posted tweet about ${topic}: ${tweet}`, 'twitter', 'opinion');
-    console.log('[TwitterScheduler] original tweet posted.');
+    await this.deps.memory.remember(`Posted ${reviewed.kind} tweet about ${topic}: ${tweet}`, 'twitter', 'opinion');
+    console.log('[TwitterScheduler] original tweet posted.', { kind: reviewed.kind });
   }
 
   private async replyToMentions(): Promise<void> {
@@ -198,23 +213,19 @@ export class TwitterAutonomousScheduler {
     for (const mention of targets) {
       await this.randomActionDelay();
 
-      const replyPrompt = [
-        'Responda a menção no X de forma curta e humana.',
-        `Menção recebida: ${mention.text}`,
-        'Regras: máximo 240 caracteres, tom natural, sem formalidade excessiva.'
-      ].join('\n');
+      const draft = await this.generateContextualReply(mention, 'mention_reply');
+      const reviewed = await this.reviewAndRefineDraft(draft);
 
-      const generated = await this.deps.router.route({
-        prompt: replyPrompt,
-        complexity: 'medium'
-      });
-
-      const replyText = this.trimTweet(generated.text);
+      const replyText = this.trimTweet(reviewed.text);
       await this.deps.twitter.replyToTweet(mention.url as string, replyText);
 
       await this.deps.collector.saveTweet(replyText, 'reply', {
-        channel: 'twitter',
-        topic: 'mentions_response'
+        contentKind: 'contextual_reply',
+        topic: 'mentions_response',
+        reviewApproved: true,
+        sourceTweetUrl: mention.url,
+        sourceTweetAuthor: mention.author,
+        sourceTweetText: mention.text
       });
 
       console.log('[TwitterScheduler] replied to mention.', { url: mention.url });
@@ -238,26 +249,198 @@ export class TwitterAutonomousScheduler {
     if (shouldReply && candidate?.url) {
       await this.randomActionDelay();
 
-      const responsePrompt = [
-        'Escreva uma resposta curta para um tweet técnico da comunidade.',
-        `Tweet: ${candidate.text}`,
-        'Regras: máximo 220 caracteres, útil e natural, sem soar promocional.'
-      ].join('\n');
+      const draft = await this.generateContextualReply(candidate, 'community_reply');
+      const reviewed = await this.reviewAndRefineDraft(draft);
 
-      const generated = await this.deps.router.route({
-        prompt: responsePrompt,
-        complexity: 'medium'
-      });
-
-      const replyText = this.trimTweet(generated.text);
+      const replyText = this.trimTweet(reviewed.text);
       await this.deps.twitter.replyToTweet(candidate.url, replyText);
       await this.deps.collector.saveTweet(replyText, 'reply', {
-        channel: 'twitter',
-        topic: 'community_interaction'
+        contentKind: 'contextual_reply',
+        topic: 'community_interaction',
+        reviewApproved: true,
+        sourceTweetUrl: candidate.url,
+        sourceTweetAuthor: candidate.author,
+        sourceTweetText: candidate.text
       });
 
       console.log('[TwitterScheduler] community reply sent.', { url: candidate.url });
     }
+  }
+
+  private async generateDraft(kind: ContentKind, topic: string): Promise<ContentDraft> {
+    const prompt = this.buildTweetPrompt(kind, topic);
+
+    const result = await this.deps.router.route({
+      prompt,
+      complexity: 'complex'
+    });
+
+    if (kind === 'thread') {
+      const threadParts = this.parseThread(result.text);
+      const text = threadParts.length > 0 ? threadParts.join('\n') : result.text;
+      return { kind, topic, prompt, text, threadParts };
+    }
+
+    return {
+      kind,
+      topic,
+      prompt,
+      text: this.trimTweet(result.text)
+    };
+  }
+
+  private async generateContextualReply(tweet: TwitterTweet, topic: string): Promise<ContentDraft> {
+    const prompt = [
+      'Responda a este tweet no X de forma humana, curta e contextual.',
+      `Tweet original: ${tweet.text}`,
+      `Autor: ${tweet.author ?? 'desconhecido'}`,
+      'Regras: máximo 240 caracteres, sem soar robótico, útil e natural.'
+    ].join('\n');
+
+    const result = await this.deps.router.route({
+      prompt,
+      complexity: 'complex'
+    });
+
+    return {
+      kind: 'contextual_reply',
+      topic,
+      prompt,
+      text: this.trimTweet(result.text)
+    };
+  }
+
+  private buildTweetPrompt(kind: ContentKind, topic: string): string {
+    const personality = this.deps.personality.buildSystemPrompt();
+
+    if (kind === 'opinion') {
+      return [
+        personality,
+        'Escreva um tweet de opinião técnica forte e autêntica.',
+        `Tema: ${topic}`,
+        'Regras: max 260 caracteres, parecer humano, sem ser genérico.'
+      ].join('\n\n');
+    }
+
+    if (kind === 'discovery') {
+      return [
+        personality,
+        'Escreva um tweet de descoberta prática que você aprendeu recentemente.',
+        `Tema: ${topic}`,
+        'Regras: max 260 caracteres, específico, tom natural.'
+      ].join('\n\n');
+    }
+
+    if (kind === 'question') {
+      return [
+        personality,
+        'Escreva um tweet em formato de pergunta para engajar comunidade técnica.',
+        `Tema: ${topic}`,
+        'Regras: max 260 caracteres, pergunta clara, linguagem humana.'
+      ].join('\n\n');
+    }
+
+    return [
+      personality,
+      'Crie uma mini thread sobre o tema em um JSON array de 2 a 4 tweets.',
+      `Tema: ${topic}`,
+      'Regras: cada item max 260 caracteres, progressão lógica, tom humano.',
+      'Retorne SOMENTE JSON array de strings.'
+    ].join('\n\n');
+  }
+
+  private async reviewAndRefineDraft(draft: ContentDraft): Promise<ContentDraft> {
+    const candidateText = draft.kind === 'thread' && draft.threadParts
+      ? draft.threadParts.join(' || ')
+      : draft.text;
+
+    const reviewPrompt = [
+      'Avalie se este conteúdo parece humano para X/Twitter.',
+      `Conteúdo: ${candidateText}`,
+      'Responda em JSON: {"score":0-10,"is_human":true/false,"reason":"...","rewrite":"..."}',
+      'Se score < 7 ou is_human=false, forneça rewrite melhorado. Se estiver bom, rewrite pode ser vazio.'
+    ].join('\n');
+
+    const review = await this.deps.router.route({
+      prompt: reviewPrompt,
+      complexity: 'complex'
+    });
+
+    const parsed = this.parseReview(review.text);
+
+    if (!parsed || (parsed.score >= 7 && parsed.isHuman)) {
+      return draft;
+    }
+
+    if (draft.kind === 'thread') {
+      const rewrittenParts = this.parseThread(parsed.rewrite || '');
+      if (rewrittenParts.length >= 2) {
+        return {
+          ...draft,
+          text: rewrittenParts.join('\n'),
+          threadParts: rewrittenParts
+        };
+      }
+      return draft;
+    }
+
+    const rewritten = (parsed.rewrite || '').trim();
+    if (rewritten.length === 0) {
+      return draft;
+    }
+
+    return {
+      ...draft,
+      text: this.trimTweet(rewritten)
+    };
+  }
+
+  private parseReview(raw: string): { score: number; isHuman: boolean; rewrite: string } | null {
+    try {
+      const json = this.extractJson(raw);
+      if (!json) return null;
+
+      const parsed = JSON.parse(json) as {
+        score?: number;
+        is_human?: boolean;
+        rewrite?: string;
+      };
+
+      return {
+        score: Number(parsed.score ?? 0),
+        isHuman: Boolean(parsed.is_human),
+        rewrite: String(parsed.rewrite ?? '')
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  private parseThread(raw: string): string[] {
+    try {
+      const json = this.extractJsonArray(raw);
+      if (!json) return [];
+      const parsed = JSON.parse(json);
+      if (!Array.isArray(parsed)) return [];
+
+      return parsed
+        .filter((item): item is string => typeof item === 'string')
+        .map((item) => this.trimTweet(item))
+        .filter((item) => item.length > 0)
+        .slice(0, 4);
+    } catch {
+      return [];
+    }
+  }
+
+  private extractJson(raw: string): string | null {
+    const match = raw.match(/\{[\s\S]*\}/);
+    return match ? match[0] : null;
+  }
+
+  private extractJsonArray(raw: string): string | null {
+    const match = raw.match(/\[[\s\S]*\]/);
+    return match ? match[0] : null;
   }
 
   private pickInterestingTweets(tweets: TwitterTweet[], limit: number): TwitterTweet[] {

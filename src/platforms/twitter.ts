@@ -152,6 +152,30 @@ export class TwitterPlatform {
     await this.persistCookies();
   }
 
+  async postThread(parts: string[]): Promise<void> {
+    if (parts.length === 0) return;
+
+    const sanitized = parts.map((part) => part.trim()).filter((part) => part.length > 0);
+    if (sanitized.length === 0) return;
+
+    await this.postTweet(this.trimToTweetLimit(sanitized[0]));
+
+    if (sanitized.length === 1) return;
+
+    let currentParentUrl = await this.getLatestOwnTweetUrl();
+
+    for (let i = 1; i < sanitized.length; i += 1) {
+      const content = this.trimToTweetLimit(sanitized[i]);
+
+      if (currentParentUrl) {
+        await this.replyToTweet(currentParentUrl, content);
+        currentParentUrl = await this.getLatestOwnTweetUrl();
+      } else {
+        await this.postTweet(content);
+      }
+    }
+  }
+
   async replyToTweet(tweetUrl: string, content: string): Promise<void> {
     const page = this.getPage();
     await page.goto(tweetUrl, { waitUntil: 'domcontentloaded' });
@@ -253,6 +277,18 @@ export class TwitterPlatform {
     await this.clickFirst(['button[data-testid$="unfollow"]']);
     await this.clickFirst(['button[data-testid="confirmationSheetConfirm"]']);
     await this.sleep(600);
+  }
+
+  async getLatestOwnTweetUrl(): Promise<string | undefined> {
+    if (!this.config.username) return undefined;
+
+    try {
+      const profile = await this.readProfile(this.config.username);
+      const latest = profile.tweets.find((tweet) => Boolean(tweet.url));
+      return latest?.url;
+    } catch {
+      return undefined;
+    }
   }
 
   private async readTimelineFromCurrentPage(limit = 10): Promise<TwitterTweet[]> {
@@ -425,5 +461,10 @@ export class TwitterPlatform {
 
   private async sleep(ms: number): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  private trimToTweetLimit(text: string): string {
+    const normalized = text.replace(/\s+/g, ' ').trim();
+    return normalized.length > 260 ? `${normalized.slice(0, 257)}...` : normalized;
   }
 }

@@ -135,9 +135,9 @@ Bolla precisa ser cinco coisas:
 - [x] Anti-detecção: delays aleatórios, não postar de madrugada, scroll antes de interagir
 
 ### 4.3 — Geração de conteúdo autêntico
-- [ ] Pipeline de tweet: escolher tópico → gerar via Anthropic → revisar humanidade → postar
-- [ ] Tipos: opinião tech, descoberta, pergunta, thread, resposta contextual
-- [ ] Registro no `interaction_log` com metadata de engajamento futuro
+- [x] Pipeline de tweet: escolher tópico → gerar via Anthropic → revisar humanidade → postar
+- [x] Tipos: opinião tech, descoberta, pergunta, thread, resposta contextual
+- [x] Registro no `training_data` com metadata de engajamento futuro
 
 **Entregável**: Agent com presença autêntica e ativa no X/Twitter.
 

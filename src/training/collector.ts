@@ -6,7 +6,7 @@ import {
   TrainingContext,
   TrainingEntry,
   TrainingMetadata,
-  TweetEngagement,
+  TweetEngagement
 } from './types.js';
 
 interface TrainingDataRow {
@@ -41,7 +41,7 @@ export class TrainingDataCollector {
         entry.output,
         qualityScore,
         entry.source,
-        JSON.stringify(metadataJson),
+        JSON.stringify(metadataJson)
       ]
     );
 
@@ -55,7 +55,7 @@ export class TrainingDataCollector {
       ...entry,
       id: row.id,
       qualityScore,
-      createdAt: row.created_at,
+      createdAt: row.created_at
     };
   }
 
@@ -87,8 +87,8 @@ export class TrainingDataCollector {
         outputTokens: routerOutput.outputTokens,
         complexity: routerOutput.complexity,
         fallbackUsed: routerOutput.fallbackUsed,
-        ...extraMeta,
-      },
+        ...extraMeta
+      }
     });
   }
 
@@ -98,7 +98,8 @@ export class TrainingDataCollector {
   async saveTweet(
     content: string,
     tweetType: 'post' | 'reply' | 'quote',
-    context?: TrainingContext
+    context?: TrainingContext,
+    extraMeta?: Partial<TrainingMetadata>
   ): Promise<SavedTrainingEntry> {
     return this.save({
       type: 'tweet_write',
@@ -106,6 +107,10 @@ export class TrainingDataCollector {
       output: content,
       source: 'twitter',
       context,
+      metadata: {
+        tweetType,
+        ...extraMeta
+      }
     });
   }
 
@@ -122,7 +127,7 @@ export class TrainingDataCollector {
       input: topic,
       output: findings,
       source: 'internal',
-      context,
+      context
     });
   }
 
@@ -139,7 +144,7 @@ export class TrainingDataCollector {
       input: file,
       output: analysis,
       source: 'internal',
-      context,
+      context
     });
   }
 
@@ -148,7 +153,7 @@ export class TrainingDataCollector {
    */
   async updateTweetEngagement(id: number, engagement: TweetEngagement): Promise<void> {
     const existing = await db.query<TrainingDataRow>(
-      `SELECT type, input, output, context, source, metadata FROM training_data WHERE id = $1`,
+      'SELECT type, input, output, context, source, metadata FROM training_data WHERE id = $1',
       [id]
     );
 
@@ -164,11 +169,11 @@ export class TrainingDataCollector {
       output: row.output,
       source: row.source as TrainingEntry['source'],
       context: ctx,
-      metadata: meta,
+      metadata: meta
     });
 
     await db.query(
-      `UPDATE training_data SET quality_score = $1, metadata = $2 WHERE id = $3`,
+      'UPDATE training_data SET quality_score = $1, metadata = $2 WHERE id = $3',
       [newScore, JSON.stringify(meta), id]
     );
 
@@ -198,7 +203,7 @@ export class TrainingDataCollector {
     return {
       total,
       byType,
-      avgScore: total > 0 ? parseFloat((weightedSum / total).toFixed(2)) : 0,
+      avgScore: total > 0 ? parseFloat((weightedSum / total).toFixed(2)) : 0
     };
   }
 }
