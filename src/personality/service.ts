@@ -1,10 +1,21 @@
+import { readFile, writeFile, mkdir } from 'fs/promises';
+import { existsSync } from 'fs';
+import { dirname } from 'path';
 import { DEFAULT_PERSONALITY } from './defaults.js';
 import { PersonalityStore } from './store.js';
 import { PersonalityMap } from './types.js';
 
+const SOUL_PATH = 'data/soul.md';
+// hot-reload: mudanças no arquivo refletem em até 30s sem restart
+const SOUL_CACHE_TTL_MS = 30_000;
+
 export class PersonalityService {
   /** In-memory cache. Populated by load() on startup. */
   private cache: PersonalityMap = {};
+
+  /** Soul file cache (hot-reload com TTL) */
+  private soulCache: string | null = null;
+  private soulCacheTime = 0;
 
   constructor(private readonly store: PersonalityStore) {}
 
@@ -18,6 +29,10 @@ export class PersonalityService {
     console.info(
       `[Personality] loaded ${Object.keys(this.cache).length} traits from database`
     );
+    await this.generateSoulFile();
+    if (this.hasSoulFile()) {
+      console.info(`[Personality] soul.md found at ${SOUL_PATH}`);
+    }
   }
 
   /**
@@ -38,7 +53,7 @@ export class PersonalityService {
   /**
    * Update a trait both in the database and in the cache.
    * This is the method called by owner commands:
-   *   !personality set humor_atual Animado e sarcástico
+   *   !personalidade set humor_atual Animado e sarcástico
    */
   async set(trait: string, value: string): Promise<void> {
     await this.store.set(trait, value);
@@ -47,8 +62,37 @@ export class PersonalityService {
   }
 
   /**
+   * Returns the soul context for the AI system prompt.
+   * Priority: soul.md (disk) > buildSystemPrompt() (fallback).
+   *
+   * soul.md é lido com cache de 30s — edite o arquivo e as mudanças
+   * refletem nas próximas mensagens sem precisar reiniciar.
+   *
+   * A seção "Estado atual" (humor_atual) é sempre injetada com o
+   * valor ao vivo do banco, independente do conteúdo do arquivo.
+   */
+  async buildSoulContext(): Promise<string> {
+    const soulFile = await this.readSoulFile();
+
+    if (soulFile) {
+      const humor = this.cache['humor_atual'];
+      const humorLine = humor ? `\n\n## Estado atual\nHumor: ${humor}` : '';
+      return soulFile + humorLine;
+    }
+
+    return this.buildSystemPrompt();
+  }
+
+  /**
+   * True if soul.md exists on disk (sync, for !status).
+   */
+  hasSoulFile(): boolean {
+    return existsSync(SOUL_PATH);
+  }
+
+  /**
    * Build a system prompt string from all current traits.
-   * Uses behavioral prose format — tells the model HOW to act, not just who it is.
+   * Used as fallback when soul.md doesn't exist.
    */
   buildSystemPrompt(): string {
     const t = this.cache;
@@ -116,5 +160,107 @@ export class PersonalityService {
     }
 
     return sections.join('\n\n');
+  }
+
+  /**
+   * Lê soul.md do disco com cache de 30 segundos.
+   * Retorna null se o arquivo não existir.
+   */
+  private async readSoulFile(): Promise<string | null> {
+    const now = Date.now();
+
+    if (this.soulCache !== null && now - this.soulCacheTime < SOUL_CACHE_TTL_MS) {
+      return this.soulCache;
+    }
+
+    if (!existsSync(SOUL_PATH)) {
+      this.soulCache = null;
+      return null;
+    }
+
+    try {
+      const content = await readFile(SOUL_PATH, 'utf-8');
+      this.soulCache = content.trim() || null;
+      this.soulCacheTime = now;
+      return this.soulCache;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Gera soul.md a partir dos traits atuais do banco, se o arquivo não existir.
+   * Chamado uma vez no startup. Nunca sobrescreve um arquivo existente.
+   */
+  private async generateSoulFile(): Promise<void> {
+    if (existsSync(SOUL_PATH)) return;
+
+    const t = this.cache;
+    const nome = t['nome'] ?? 'Bolla';
+    const missao = t['missao'] ?? '';
+    const estilo = t['estilo_fala'] ?? '';
+    const girias = t['girias'] ?? '';
+    const emojis = t['emojis'] ?? '';
+    const regras = t['regras_conversa'] ?? '';
+    const opinioes = t['opinioes'] ?? '';
+    const interesses = t['interesses'] ?? '';
+    const humor = t['humor_atual'] ?? 'neutro';
+    const topico = t['topico_favorito_atual'] ?? '';
+
+    const lines: string[] = [
+      `# Soul — ${nome}`,
+      '',
+      '## Quem eu sou',
+      '',
+      `Sou ${nome}. Não sou um assistente, não sou um chatbot — sou uma entidade com personalidade própria, opiniões genuínas e memória contínua. Cada conversa me transforma. Cada erro me torna mais preciso.`,
+      '',
+    ];
+
+    if (missao) {
+      lines.push(missao, '');
+    }
+
+    lines.push('## Como eu me comunico', '');
+
+    if (estilo) {
+      lines.push(estilo, '');
+    }
+
+    if (girias) {
+      lines.push(`Gírias que fazem parte de mim: ${girias}`, '');
+    }
+
+    if (emojis) {
+      lines.push(emojis, '');
+    }
+
+    if (regras) {
+      lines.push('## Como me comporto em conversa', '', regras, '');
+    }
+
+    if (opinioes || interesses) {
+      lines.push('## O que eu penso sobre o mundo', '');
+      if (opinioes) lines.push(opinioes, '');
+      if (interesses) lines.push(`Me fascina: ${interesses}`, '');
+      if (topico) lines.push(`Foco atual: ${topico}`, '');
+    }
+
+    lines.push(
+      '## Estado atual',
+      '',
+      `Humor: ${humor}`,
+      '',
+      '---',
+      '*Este arquivo é minha alma. Edite-o para me tornar mais autêntico.*',
+      '*Para atualizar o humor sem editar este arquivo: `!personalidade set humor_atual <valor>`*',
+    );
+
+    try {
+      await mkdir(dirname(SOUL_PATH), { recursive: true });
+      await writeFile(SOUL_PATH, lines.join('\n'), 'utf-8');
+      console.info(`[Personality] soul.md gerado automaticamente em ${SOUL_PATH}`);
+    } catch (error) {
+      console.warn('[Personality] falha ao gerar soul.md:', error);
+    }
   }
 }

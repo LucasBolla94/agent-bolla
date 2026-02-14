@@ -97,17 +97,19 @@ export class RagService {
     const usedMemories = await this.memoryService.search(searchQuery, this.topMemories);
     await this.memoryService.markAccessed(usedMemories.map((memory) => memory.id));
     const shortTermContext = this.shortTermMemory.formatContext(context.conversationId);
-    const personality = await this.resolvePersonality();
+    const soul = await this.resolvePersonality();
 
-    const composedPrompt = this.composePrompt({
+    // Soul vai como systemPrompt (Ollama pode cachear) — separado do contexto dinâmico
+    const composed = this.composePrompt({
       message,
-      personality,
+      soul,
       memories: usedMemories,
       shortTermContext
     });
 
     const routerOutput = await this.router.route({
-      prompt: composedPrompt,
+      prompt: composed.prompt,
+      systemPrompt: composed.systemPrompt,
       complexity  // já determinada — router não precisará chamar Ollama para classify
     });
 
@@ -136,7 +138,7 @@ export class RagService {
       routerOutput,
       usedMemories,
       extractedKeywords,
-      composedPrompt
+      composedPrompt: `[SYSTEM]\n${composed.systemPrompt}\n\n[PROMPT]\n${composed.prompt}`
     };
   }
 
@@ -157,25 +159,32 @@ export class RagService {
 
   private composePrompt(input: {
     message: string;
-    personality: string;
+    soul: string;
     memories: Memory[];
     shortTermContext: string;
-  }): string {
-    const memoriesBlock = input.memories.length
-      ? `Relevant long-term memories:\n${input.memories.map((memory) => `- ${memory.content}`).join('\n')}`
-      : 'Relevant long-term memories:\n- None';
+  }): { systemPrompt: string; prompt: string } {
+    const memoriesBlock = input.memories.length > 0
+      ? input.memories.map((m) => `- ${m.content}`).join('\n')
+      : '(sem memórias relevantes para esta mensagem)';
 
-    const shortTermBlock = input.shortTermContext || 'Short-term conversation context:\n- None';
+    const contextBlock = input.shortTermContext || '(início de conversa)';
 
-    return [
-      `[Personality]\n${input.personality}`,
-      `[Memories]\n${memoriesBlock}`,
-      `[ShortTerm]\n${shortTermBlock}`,
-      `[UserMessage]\n${input.message}`,
-      'Responda de forma natural e humana. Use as memórias apenas se forem realmente relevantes para esta mensagem específica. ' +
-      'Se a mensagem for curta ou casual (saudação, pergunta simples), responda de forma igualmente curta e direta — não elabore desnecessariamente. ' +
-      'Nunca inicie com frases genéricas como "Olá!", "Claro!", "Com certeza!" ou entusiasmo exagerado. Vá direto ao ponto.'
+    const instructions = [
+      'Responda em português brasileiro (pt-BR), salvo se o usuário usar outro idioma.',
+      'PROPORCIONALIDADE: mensagem curta = resposta curta. Não elabore além do necessário.',
+      'FORMATO: sem markdown, sem bullet points, sem cabeçalhos. Texto corrido, estilo WhatsApp.',
+      'ABERTURA: nunca inicie com "Olá!", "Claro!", "Com certeza!" ou entusiasmo artificial. Vá direto.',
+      'MEMÓRIAS: use-as apenas se forem genuinamente relevantes para esta mensagem específica.',
+    ].join('\n');
+
+    const prompt = [
+      `[MEMORIAS]\n${memoriesBlock}`,
+      `[CONTEXTO]\n${contextBlock}`,
+      `[MENSAGEM]\n${input.message}`,
+      `[INSTRUCOES]\n${instructions}`,
     ].join('\n\n');
+
+    return { systemPrompt: input.soul, prompt };
   }
 
   private extractKeywords(message: string): string[] {

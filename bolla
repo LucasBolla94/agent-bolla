@@ -116,7 +116,7 @@ cmd_help() {
   echo -e "${BOLD}  Comandos:${NC}"
   echo -e "    ${GREEN}start${NC}              Inicia o agent (build + QR se necessário + background)"
   echo -e "    ${GREEN}stop${NC}               Para o agent"
-  echo -e "    ${GREEN}restart${NC}            Reinicia o agent (rebuild automático)"
+  echo -e "    ${GREEN}restart${NC}            Atualiza (git pull + npm install + build) e reinicia"
   echo -e "    ${GREEN}status${NC}             Exibe status do agent"
   echo -e "    ${GREEN}logs${NC}  [-n N]       Acompanha os logs em tempo real"
   echo -e "    ${GREEN}qr${NC}                 Exibe QR code para reconectar WhatsApp"
@@ -318,18 +318,73 @@ cmd_restart() {
   require_node
   require_pm2
 
-  log_step "Reconstruindo projeto..."
-  if ! npm run build > /dev/null 2>&1; then
-    log_err "Build falhou. Abortando restart."
+  echo ""
+  echo -e "${CYAN}${BOLD}  BOLLA — Atualizando e Reiniciando${NC}"
+  echo ""
+
+  # 1. Git pull — pega a última versão do remote
+  if git -C "$SCRIPT_DIR" remote get-url origin &>/dev/null 2>&1; then
+    local BRANCH
+    BRANCH=$(git -C "$SCRIPT_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")
+
+    log_step "Puxando última versão (git pull origin $BRANCH)..."
+
+    # Stash temporário de mudanças locais rastreadas para não bloquear o pull
+    local STASHED=false
+    if ! git -C "$SCRIPT_DIR" diff --quiet 2>/dev/null; then
+      log_dim "Mudanças locais detectadas — stash temporário..."
+      git -C "$SCRIPT_DIR" stash push -m "bolla-restart-$(date +%s)" > /dev/null 2>&1 \
+        && STASHED=true
+    fi
+
+    if git -C "$SCRIPT_DIR" pull --ff-only origin "$BRANCH" 2>&1 | sed 's/^/  /'; then
+      log_ok "Código atualizado a partir do remote"
+    elif git -C "$SCRIPT_DIR" pull origin "$BRANCH" 2>&1 | sed 's/^/  /'; then
+      log_ok "Código atualizado (via merge)"
+    else
+      log_warn "git pull falhou — usando código atual no disco"
+    fi
+
+    # Restaura mudanças locais (ex: .env, soul.md)
+    if [ "$STASHED" = "true" ]; then
+      git -C "$SCRIPT_DIR" stash pop > /dev/null 2>&1 \
+        || log_warn "Stash pop falhou — verifique: git stash list"
+    fi
+  else
+    log_warn "Remote git não configurado — pulando atualização"
+  fi
+
+  # 2. Instalar / atualizar dependências npm
+  log_step "Atualizando dependências npm..."
+  npm install --loglevel=error 2>&1 \
+    | grep -E "^(added|removed|changed|warn|npm WARN)" \
+    | sed 's/^/  /' || true
+  log_ok "Dependências prontas"
+
+  # 3. Build TypeScript
+  log_step "Compilando TypeScript..."
+  local BUILD_OUT
+  if BUILD_OUT=$(npm run build 2>&1); then
+    log_ok "Build concluído → dist/"
+  else
+    log_err "Build falhou:"
+    echo "$BUILD_OUT" | sed 's/^/  /'
+    log_err "Restart abortado. Corrija os erros acima e rode: bolla restart"
     exit 1
   fi
-  log_ok "Build concluído"
 
+  # 4. Restart ou Start
   if is_running; then
-    log_step "Reiniciando via PM2..."
+    log_step "Reiniciando processo PM2..."
     pm2 restart "$PM2_APP" > /dev/null 2>&1
-    sleep 2
-    log_ok "Agent reiniciado"
+    sleep 3
+    local STATUS
+    STATUS=$(pm2_status)
+    if [ "$STATUS" = "online" ]; then
+      log_ok "Agent reiniciado com sucesso"
+    else
+      log_warn "Status PM2 após restart: $STATUS — use: bolla logs"
+    fi
   else
     log_step "Agent não estava rodando — iniciando..."
     cmd_start

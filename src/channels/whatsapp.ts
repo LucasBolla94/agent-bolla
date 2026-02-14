@@ -380,7 +380,8 @@ export class WhatsAppBaileysChannel implements WhatsAppChannel {
       const memCount = await this.deps.memory.count();
       const nome = this.deps.personality.get('nome');
       const humor = this.deps.personality.get('humor_atual');
-      return `${nome} online.\nHumor: ${humor}\nMemórias: ${memCount}\nPipeline RAG ativo.`;
+      const soul = this.deps.personality.hasSoulFile() ? 'soul.md ativo' : 'usando defaults';
+      return `${nome} online.\nHumor: ${humor}\nMemórias: ${memCount}\nSoul: ${soul}\nPipeline RAG ativo.`;
     }
 
     if (cmd === '!ping') return 'pong';

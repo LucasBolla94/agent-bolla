@@ -68,7 +68,7 @@ async function main(): Promise<void> {
       collector,
       shortTermLimit: 10,
       options: {
-        personalityProvider: async () => personality.buildSystemPrompt()
+        personalityProvider: async () => personality.buildSoulContext()
       }
     });
     console.log('RAG service ready (keywords + memory retrieval + short-term context).');
