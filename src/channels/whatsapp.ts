@@ -7,6 +7,8 @@ import makeWASocket, {
   WASocket
 } from '@whiskeysockets/baileys';
 import QRCode from 'qrcode';
+import { rm } from 'fs/promises';
+import { existsSync } from 'fs';
 import { RagService } from '../memory/rag.js';
 import { MemoryService } from '../memory/service.js';
 import { PersonalityService } from '../personality/service.js';
@@ -74,8 +76,30 @@ export class WhatsAppBaileysChannel implements WhatsAppChannel {
     return this.connected && Boolean(this.sock);
   }
 
+  private async clearAuthFiles(): Promise<void> {
+    try {
+      if (existsSync(this.config.authDir)) {
+        await rm(this.config.authDir, { recursive: true, force: true });
+        console.log('[WhatsApp] Auth directory cleared:', this.config.authDir);
+      }
+    } catch (error) {
+      console.error('[WhatsApp] Error clearing auth files:', error);
+    }
+  }
+
   private async renderQRCode(text: string): Promise<void> {
     try {
+      // Salva QR code como imagem PNG
+      const qrImagePath = 'data/whatsapp-qr.png';
+      await QRCode.toFile(qrImagePath, text, {
+        errorCorrectionLevel: 'M',
+        type: 'png',
+        width: 400,
+        margin: 2
+      });
+      process.stdout.write(`\n🎯 QR Code salvo em: ${qrImagePath}\n`);
+      process.stdout.write(`📥 Baixe/abra este arquivo para escanear!\n\n`);
+
       // Detecta se está em ambiente SSH/remoto
       const isSSH = Boolean(process.env.SSH_CONNECTION || process.env.SSH_CLIENT || process.env.SSH_TTY);
       const term = process.env.TERM || '';
@@ -93,7 +117,7 @@ export class WhatsAppBaileysChannel implements WhatsAppChannel {
 
       // Gera QR code como matriz de dados
       const qrMatrix = await QRCode.create(text, {
-        errorCorrectionLevel: 'L'
+        errorCorrectionLevel: 'M'
       });
 
       const modules = qrMatrix.modules;
@@ -182,15 +206,20 @@ export class WhatsAppBaileysChannel implements WhatsAppChannel {
         syncFullHistory: false
       });
 
-      this.sock.ev.on('creds.update', saveCreds);
+      this.sock.ev.on('creds.update', async () => {
+        console.log('[WhatsApp] 💾 Credenciais atualizadas, salvando...');
+        await saveCreds();
+        console.log('[WhatsApp] ✓ Credenciais salvas em:', this.config.authDir);
+      });
 
       this.sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect, qr } = update;
 
         if (qr) {
-          console.log('\n[WhatsApp] QR Code para conectar:\n');
+          const timestamp = new Date().toLocaleTimeString('pt-BR');
+          console.log(`\n[WhatsApp] 🔄 NOVO QR Code gerado às ${timestamp}:\n`);
           await this.renderQRCode(qr);
-          console.log('\n[WhatsApp] Escaneie o QR code acima com o WhatsApp.\n');
+          console.log(`\n[WhatsApp] ⚡ QR Code válido por ~60 segundos. Um novo será gerado automaticamente.\n`);
         }
 
         if (connection === 'open') {
@@ -200,7 +229,10 @@ export class WhatsAppBaileysChannel implements WhatsAppChannel {
             clearTimeout(this.reconnectTimer);
             this.reconnectTimer = undefined;
           }
-          console.log('[WhatsApp] Connected. Session persisted on disk.');
+          console.log('[WhatsApp] 🎉 Connected! Aguardando sincronização...');
+          // Aguarda um pouco para garantir que todas as credenciais foram salvas
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          console.log('[WhatsApp] ✓ Connected. Session persisted on disk.');
           await this.notifyOwner('WhatsApp channel online.');
         }
 
@@ -211,6 +243,13 @@ export class WhatsAppBaileysChannel implements WhatsAppChannel {
 
           const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
           console.warn('[WhatsApp] Connection closed.', { statusCode, shouldReconnect });
+
+          // Se foi logout (desconectado pelo app), limpa as credenciais
+          if (statusCode === DisconnectReason.loggedOut) {
+            console.warn('[WhatsApp] Session logged out. Clearing auth files...');
+            await this.clearAuthFiles();
+            console.log('[WhatsApp] Auth files cleared. Use "bolla qr" to reconnect.');
+          }
 
           if (shouldReconnect) {
             this.scheduleReconnect();
@@ -298,12 +337,22 @@ export class WhatsAppBaileysChannel implements WhatsAppChannel {
       return;
     }
 
-    const ragResponse = await this.deps.rag.respond(incomingText, {
-      conversationId: `whatsapp:${conversation.id}`,
-      source: 'whatsapp',
-      channel: 'whatsapp',
-      userRole: user.role
-    });
+    // Indica que o bot está digitando enquanto processa a resposta da IA
+    await socket.sendPresenceUpdate('composing', message.key.remoteJid).catch(() => {});
+
+    let ragResponse;
+    try {
+      ragResponse = await this.deps.rag.respond(incomingText, {
+        conversationId: `whatsapp:${conversation.id}`,
+        source: 'whatsapp',
+        channel: 'whatsapp',
+        userRole: user.role
+      });
+    } finally {
+      await socket.sendPresenceUpdate('paused', message.key.remoteJid).catch(() => {});
+    }
+
+    if (!ragResponse) return;
 
     await this.replyAndPersist({
       jid: message.key.remoteJid,

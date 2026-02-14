@@ -120,6 +120,7 @@ cmd_help() {
   echo -e "    ${GREEN}status${NC}             Exibe status do agent"
   echo -e "    ${GREEN}logs${NC}  [-n N]       Acompanha os logs em tempo real"
   echo -e "    ${GREEN}qr${NC}                 Exibe QR code para reconectar WhatsApp"
+  echo -e "    ${GREEN}logout${NC}             Desconecta WhatsApp e limpa sessão"
   echo -e "    ${GREEN}build${NC}              Compila o TypeScript"
   echo -e "    ${GREEN}install${NC}            Instala 'bolla' globalmente (${DIM}/usr/local/bin${NC})"
   echo ""
@@ -182,7 +183,9 @@ _run_qr_and_wait() {
 
   _qr_ctrlc() {
     echo ""
-    echo -e "${YELLOW}Ctrl+C detectado — indo para background...${NC}"
+    echo -e "${YELLOW}Ctrl+C detectado — aguardando salvamento das credenciais...${NC}"
+    # Aguarda 3 segundos para garantir salvamento
+    sleep 3
     CONNECTED=true
     kill "$NODE_PID" 2>/dev/null || true
     pkill -P "$NODE_PID" 2>/dev/null || true
@@ -197,6 +200,10 @@ _run_qr_and_wait() {
     # Detecta conexão via log (case-insensitive; o log real é "[WhatsApp] Connected.")
     if grep -qiE '\[WhatsApp\] Connected|WhatsApp.*conectado|connection.*open|Bolla.*online' "$TEMP_LOG" 2>/dev/null; then
       CONNECTED=true
+      echo ""
+      echo -e "${GREEN}✓ Conexão detectada! Aguardando salvamento das credenciais...${NC}"
+      # CRÍTICO: Aguarda 5 segundos para garantir que o baileys salve as credenciais no disco
+      sleep 5
       kill "$NODE_PID" 2>/dev/null || true
       break
     fi
@@ -436,9 +443,31 @@ cmd_qr() {
 
   log_step "Parando agent temporariamente para exibir QR..."
   pm2 stop "$PM2_APP" 2>/dev/null || true
+  pkill -9 -f "node.*dist/index.js" 2>/dev/null || true
   sleep 2
 
+  # Sempre limpa a sessão para forçar novo QR code válido
+  # (necessário pois o QR antigo pode ter expirado)
+  log_step "Limpando sessão antiga para gerar QR code novo..."
+  if [ -d "$AUTH_DIR" ]; then
+    rm -rf "$AUTH_DIR"
+    log_ok "Sessão antiga removida"
+  fi
+  mkdir -p "$AUTH_DIR"
+  sleep 1
+
   _run_qr_and_wait
+
+  # IMPORTANTE: Aguarda mais tempo para garantir que as credenciais foram salvas
+  log_step "Aguardando salvamento das credenciais..."
+  sleep 3
+
+  # Verifica se as credenciais foram salvas
+  if [ -f "$AUTH_DIR/creds.json" ]; then
+    log_ok "Credenciais salvas com sucesso"
+  else
+    log_warn "Aviso: credenciais não encontradas. Pode ser necessário escanear novamente."
+  fi
 
   log_step "Reiniciando agent em background..."
   if pm2 describe "$PM2_APP" &>/dev/null; then
@@ -451,6 +480,24 @@ cmd_qr() {
 
   log_ok "Agent voltou ao background"
   _print_status_box
+}
+
+# ── CMD: logout ─────────────────────────────────────────────────
+cmd_logout() {
+  require_dir
+
+  log_step "Desconectando WhatsApp e limpando sessão..."
+
+  if [ -d "$AUTH_DIR" ]; then
+    rm -rf "$AUTH_DIR"/*
+    log_ok "Sessão WhatsApp removida"
+  else
+    log_warn "Nenhuma sessão encontrada"
+  fi
+
+  echo ""
+  echo -e "${CYAN}Para reconectar, execute: ${BOLD}bolla qr${NC}"
+  echo ""
 }
 
 # ── CMD: install ─────────────────────────────────────────────────
@@ -500,6 +547,7 @@ case "$COMMAND" in
   status)     cmd_status   "$@" ;;
   logs)       cmd_logs     "$@" ;;
   qr)         cmd_qr       "$@" ;;
+  logout)     cmd_logout   "$@" ;;
   build)      cmd_build    "$@" ;;
   install)    cmd_install  "$@" ;;
   help|--help|-h) cmd_help ;;

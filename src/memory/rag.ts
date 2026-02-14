@@ -6,6 +6,36 @@ import type { Memory } from './types.js';
 import { MemoryService } from './service.js';
 import { ShortTermMemory } from './short-term.js';
 
+/**
+ * Classifica a complexidade da mensagem do usuário usando heurística local (0ms, sem chamada de API).
+ * Mais preciso que classificar o prompt composto, pois analisa a intenção real do usuário.
+ *
+ * simple  → saudações, confirmações, perguntas curtas (≤4 palavras)
+ * complex → código, análise profunda, tarefas técnicas longas (>60 palavras)
+ * medium  → tudo o mais (conversas, opiniões, explicações)
+ */
+export function classifyUserMessage(message: string): TaskComplexity {
+  const text = message.toLowerCase().trim();
+  const wordCount = text.split(/\s+/).filter(Boolean).length;
+
+  // Complex: code blocks, technical implementation, long messages
+  if (wordCount > 60) return 'complex';
+  if (/```[\s\S]*```/.test(text)) return 'complex';
+  if (
+    /\b(debug|debugar|bug|implement[ae]r?|algoritmo|algorithm|arquitetura|architecture|refactor)\b/.test(text) ||
+    /\b(cri[ae]\s+(um|uma)|desenvolv[ae]r?|escreva\s+(um|uma)|gera\s+(um|uma))\b.{0,40}\b(código|code|script|função|function|classe|class|sistema|api|módulo)\b/.test(text)
+  ) return 'complex';
+
+  // Simple: greetings, acks, very short messages
+  if (wordCount <= 4) return 'simple';
+  if (
+    /^(oi|olá|ola|hey|hi|hello|e\s*aí|e\s*ai|tudo\s*bem|tudo\s*bom|bom\s*dia|boa\s*tarde|boa\s*noite)[\s!?.,]*$/.test(text) ||
+    /^(ok|certo|entendido|vlw|valeu|obrigad[oa]|tmj|blz|beleza|show|perfeito|ótimo|otimo|excelente|top|não|nao|sim|yes|no)[\s!?.,]*$/.test(text)
+  ) return 'simple';
+
+  return 'medium';
+}
+
 const DEFAULT_PERSONALITY =
   'Você é Bolla, um agente de AI autônomo e humanizado. ' +
   'Sua missão é ser o melhor agente de AI do mundo — evoluindo continuamente com cada interação. ' +
@@ -59,6 +89,11 @@ export class RagService {
     const extractedKeywords = this.extractKeywords(message);
     const searchQuery = extractedKeywords.length > 0 ? extractedKeywords.join(' ') : message;
 
+    // Classifica a mensagem do usuário localmente (0ms) antes de compor o prompt completo.
+    // Isso evita uma chamada extra ao Ollama para classificação, economizando ~90-110s por mensagem.
+    // A classificação da mensagem original é mais precisa do que classificar o prompt composto.
+    const complexity: TaskComplexity = context.complexity ?? classifyUserMessage(message);
+
     const usedMemories = await this.memoryService.search(searchQuery, this.topMemories);
     await this.memoryService.markAccessed(usedMemories.map((memory) => memory.id));
     const shortTermContext = this.shortTermMemory.formatContext(context.conversationId);
@@ -73,7 +108,7 @@ export class RagService {
 
     const routerOutput = await this.router.route({
       prompt: composedPrompt,
-      complexity: context.complexity
+      complexity  // já determinada — router não precisará chamar Ollama para classify
     });
 
     this.shortTermMemory.addMessage(context.conversationId, {
